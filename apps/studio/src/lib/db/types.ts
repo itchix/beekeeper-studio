@@ -2,7 +2,7 @@ import { CancelableQuery, DatabaseFilterOptions, ExtendedTableColumn, FieldDescr
 import { AlterPartitionsSpec, AlterTableSpec, CreateTableSpec, IndexAlterations, RelationAlterations, TableKey } from '@shared/lib/dialects/models';
 import type { SshMode } from '@/common/interfaces/IConnection';
 
-export const DatabaseTypes = ['sqlite', 'sqlserver', 'redshift', 'cockroachdb', 'mysql', 'postgresql', 'mariadb', 'cassandra', 'scylladb', 'oracle', 'bigquery', 'firebird', 'tidb', 'libsql', 'clickhouse', 'duckdb', 'greengage', 'mongodb', 'sqlanywhere', 'surrealdb', 'redis', 'trino', 'bedrock'] as const
+export const DatabaseTypes = ['sqlite', 'sqlserver', 'redshift', 'cockroachdb', 'mysql', 'postgresql', 'mariadb', 'cassandra', 'scylladb', 'oracle', 'bigquery', 'firebird', 'tidb', 'libsql', 'clickhouse', 'duckdb', 'greengage', 'mongodb', 'sqlanywhere', 'surrealdb', 'redis', 'trino', 'bedrock', 'firestore'] as const
 export type ConnectionType = typeof DatabaseTypes[number]
 
 export const ConnectionTypes = [
@@ -28,7 +28,8 @@ export const ConnectionTypes = [
   { name: 'Trino', value: 'trino' },
   { name: 'SurrealDB', value: 'surrealdb' },
   { name: 'Redis', value: 'redis' },
-  { name: 'Bedrock', value: 'bedrock' }
+  { name: 'Bedrock', value: 'bedrock' },
+  { name: 'Firestore', value: 'firestore' }
 ]
 
 /** `value` should be recognized by codemirror */
@@ -141,6 +142,19 @@ export interface SurrealDBOptions {
   token?: string;
 }
 
+export enum FirestoreAuthType {
+  ServiceAccount = 'serviceAccount',
+  ApplicationDefault = 'applicationDefault'
+}
+
+export interface FirestoreOptions {
+  authType?: FirestoreAuthType;
+  serviceAccountJson?: string;
+  serviceAccountPath?: string;
+  projectId?: string;
+  databaseId?: string;
+}
+
 export enum SurrealAuthType {
   Root,
   Namespace,
@@ -230,6 +244,7 @@ export interface IDbConnectionServerConfig {
   libsqlOptions?: LibSQLOptions
   sqlAnywhereOptions?: SQLAnywhereOptions
   surrealDbOptions?: SurrealDBOptions
+  firestoreOptions?: FirestoreOptions
   runtimeExtensions?: string[]
 }
 

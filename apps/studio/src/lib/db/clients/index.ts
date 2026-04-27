@@ -298,5 +298,24 @@ export const CLIENTS: ClientConfig[] = [
       'server:domain',
       'server:socketPathWithCustomPort',
     ]
+  },
+  {
+    key: 'firestore',
+    name: 'Firestore',
+    defaultPort: 443,
+    disabledFeatures: [
+      'server:host',
+      'server:port',
+      'server:socketPath',
+      'server:socketPathWithCustomPort',
+      'server:user',
+      'server:password',
+      'server:schema',
+      'server:domain',
+      'server:ssh',
+      'server:ssl',
+      'scriptCreateTable',
+      'cancelQuery',
+    ],
   }
 ];

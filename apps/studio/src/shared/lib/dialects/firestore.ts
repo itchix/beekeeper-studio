@@ -1,0 +1,80 @@
+import { ColumnType, DialectData } from "./models";
+
+const types = [
+  'string', 'number', 'boolean', 'null', 'map', 'array',
+  'timestamp', 'geopoint', 'reference', 'bytes'
+]
+
+export const FirestoreData: DialectData = {
+  sqlLabel: "code",
+  columnTypes: types.map((t) => new ColumnType(t)),
+  usesOffsetPagination: true,
+  queryDialectOverride: 'generic',
+  textEditorMode: 'text/x-javascript',
+  rawFilterPlaceholder: 'Field path',
+  disabledFeatures: {
+    manualCommit: true,
+    resultEditing: false,
+    readOnlyPrimaryKeys: true,
+    builderFilters: true,
+    shell: true,
+    informationSchema: {
+      extra: true,
+    },
+    indexes: true,
+    alter: {
+      addColumn: true,
+      dropColumn: true,
+      renameColumn: true,
+      alterColumn: true,
+      multiStatement: true,
+      addConstraint: true,
+      dropConstraint: true,
+      everything: true,
+      indexes: true,
+      renameSchema: true,
+      renameTable: true,
+      renameView: true,
+      reorderColumn: true,
+    },
+    triggers: true,
+    relations: true,
+    constraints: {
+      onUpdate: true,
+      onDelete: true,
+    },
+    index: {
+      id: true,
+      desc: true,
+      primary: true,
+    },
+    primary: true,
+    defaultValue: true,
+    nullable: true,
+    createIndex: true,
+    comments: true,
+    filterWithOR: true,
+    backup: true,
+    truncateElement: true,
+    exportTable: true,
+    createTable: false,
+    dropTable: false,
+    dropSchema: true,
+    collations: true,
+    importFromFile: true,
+    headerSort: true,
+    duplicateTable: true,
+    export: {
+      sql: true,
+    },
+    schema: true,
+    generatedColumns: true,
+    transactions: true,
+    chunkSizeStream: true,
+    binaryColumn: true,
+    initialSort: true,
+    sqlCreate: true,
+    compositeKeys: true,
+    schemaValidation: true,
+  }
+}

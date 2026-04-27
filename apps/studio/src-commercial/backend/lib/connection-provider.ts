@@ -1,60 +1,76 @@
-import { IGroupedUserSettings } from '@/common/appdb/models/user_setting'
-import { IConnection } from '@/common/interfaces/IConnection'
-import { IDbConnectionPublicServer } from '@/lib/db/serverTypes'
-import { IDbConnectionServerConfig } from '@/lib/db/types'
-import { createServer } from './db/server'
-import { readSshConfig } from '@/lib/ssh/sshConfigReader'
+import { IGroupedUserSettings } from "@/common/appdb/models/user_setting";
+import { IConnection } from "@/common/interfaces/IConnection";
+import { IDbConnectionPublicServer } from "@/lib/db/serverTypes";
+import { IDbConnectionServerConfig } from "@/lib/db/types";
+import { createServer } from "./db/server";
+import { readSshConfig } from "@/lib/ssh/sshConfigReader";
 
 export default {
-  convertConfig(config: IConnection, osUsername: string, settings: IGroupedUserSettings): IDbConnectionServerConfig {
-    const sqliteExtension = settings?.sqliteExtensionFile?.value || undefined
-    const ssh = config.sshEnabled ? {
-      host: config.sshHost ? config.sshHost.trim() : null,
-      port: config.sshPort,
-      user: config.sshUsername ? config.sshUsername.trim() : null,
-      password: config.sshMode === 'userpass' ? config.sshPassword : null,
-      privateKey: config.sshMode === 'keyfile' ? config.sshKeyfile : null,
-      passphrase: config.sshMode === 'keyfile' ? config.sshKeyfilePassword : null,
-      bastionHost: config.sshBastionHost,
-      bastionPort: config.sshBastionHostPort,
-      bastionUser: config.sshBastionUsername,
-      bastionPassword: config.sshBastionMode === 'userpass' ? config.sshBastionPassword : null,
-      bastionPrivateKey: config.sshBastionMode === 'keyfile' ? config.sshBastionKeyfile : null,
-      bastionPassphrase: config.sshBastionMode === 'keyfile' ? config.sshBastionKeyfilePassword : null,
-      bastionMode: config.sshBastionMode,
-      useAgent: config.sshMode == 'agent',
-      keepaliveInterval: config.sshKeepaliveInterval,
-    } : null
+  convertConfig(
+    config: IConnection,
+    osUsername: string,
+    settings: IGroupedUserSettings
+  ): IDbConnectionServerConfig {
+    const sqliteExtension = settings?.sqliteExtensionFile?.value || undefined;
+    const ssh = config.sshEnabled
+      ? {
+          host: config.sshHost ? config.sshHost.trim() : null,
+          port: config.sshPort,
+          user: config.sshUsername ? config.sshUsername.trim() : null,
+          password: config.sshMode === "userpass" ? config.sshPassword : null,
+          privateKey: config.sshMode === "keyfile" ? config.sshKeyfile : null,
+          passphrase:
+            config.sshMode === "keyfile" ? config.sshKeyfilePassword : null,
+          bastionHost: config.sshBastionHost,
+          bastionPort: config.sshBastionHostPort,
+          bastionUser: config.sshBastionUsername,
+          bastionPassword:
+            config.sshBastionMode === "userpass"
+              ? config.sshBastionPassword
+              : null,
+          bastionPrivateKey:
+            config.sshBastionMode === "keyfile"
+              ? config.sshBastionKeyfile
+              : null,
+          bastionPassphrase:
+            config.sshBastionMode === "keyfile"
+              ? config.sshBastionKeyfilePassword
+              : null,
+          bastionMode: config.sshBastionMode,
+          useAgent: config.sshMode == "agent",
+          keepaliveInterval: config.sshKeepaliveInterval,
+        }
+      : null;
 
-    if (ssh && config.sshMode === 'agent' && config.sshHost) {
-      const fileConfig = readSshConfig(config.sshHost.trim())
+    if (ssh && config.sshMode === "agent" && config.sshHost) {
+      const fileConfig = readSshConfig(config.sshHost.trim());
       if (fileConfig.port && !ssh.port) {
-        ssh.port = fileConfig.port
+        ssh.port = fileConfig.port;
       }
       if (fileConfig.identityFile) {
-        ssh.privateKey = fileConfig.identityFile
+        ssh.privateKey = fileConfig.identityFile;
       }
       if (fileConfig.host) {
-        ssh.host = fileConfig.host
+        ssh.host = fileConfig.host;
       }
       if (fileConfig.user && !ssh.user) {
-        ssh.user = fileConfig.user
+        ssh.user = fileConfig.user;
       }
     }
 
-    if (ssh && config.sshBastionMode === 'agent' && config.sshBastionHost) {
-      const fileConfig = readSshConfig(config.sshBastionHost.trim())
+    if (ssh && config.sshBastionMode === "agent" && config.sshBastionHost) {
+      const fileConfig = readSshConfig(config.sshBastionHost.trim());
       if (fileConfig.port && !ssh.bastionPort) {
-        ssh.bastionPort = fileConfig.port
+        ssh.bastionPort = fileConfig.port;
       }
       if (fileConfig.identityFile) {
-        ssh.bastionPrivateKey = fileConfig.identityFile
+        ssh.bastionPrivateKey = fileConfig.identityFile;
       }
       if (fileConfig.host) {
-        ssh.bastionHost = fileConfig.host
+        ssh.bastionHost = fileConfig.host;
       }
       if (fileConfig.user && !ssh.bastionUser) {
-        ssh.bastionUser = fileConfig.user
+        ssh.bastionUser = fileConfig.user;
       }
     }
 
@@ -79,8 +95,10 @@ export default {
       sslKeyFile: config.sslKeyFile,
       sslRejectUnauthorized: config.sslRejectUnauthorized,
       trustServerCertificate: config.trustServerCertificate,
-      instantClientLocation: settings?.oracleInstantClient?.stringValue || undefined,
-      oracleConfigLocation: settings?.oracleConfigLocation?.stringValue || undefined,
+      instantClientLocation:
+        settings?.oracleInstantClient?.stringValue || undefined,
+      oracleConfigLocation:
+        settings?.oracleConfigLocation?.stringValue || undefined,
       options: config.options,
       redshiftOptions: config.redshiftOptions,
       iamAuthOptions: config.iamAuthOptions,
@@ -92,13 +110,18 @@ export default {
       libsqlOptions: config.libsqlOptions,
       sqlAnywhereOptions: config.sqlAnywhereOptions,
       surrealDbOptions: config.surrealDbOptions,
-      runtimeExtensions: sqliteExtension ? sqliteExtension as string[] : []
-    }
+      firestoreOptions: config.firestoreOptions,
+      runtimeExtensions: sqliteExtension ? (sqliteExtension as string[]) : [],
+    };
   },
 
-  for(config: IConnection, osUsername: string, settings: IGroupedUserSettings): IDbConnectionPublicServer {
-    const convertedConfig = this.convertConfig(config, osUsername, settings)
-    const server = createServer(convertedConfig)
-    return server
-  }
-}
+  for(
+    config: IConnection,
+    osUsername: string,
+    settings: IGroupedUserSettings
+  ): IDbConnectionPublicServer {
+    const convertedConfig = this.convertConfig(config, osUsername, settings);
+    const server = createServer(convertedConfig);
+    return server;
+  },
+};

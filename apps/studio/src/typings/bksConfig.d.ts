@@ -111,6 +111,20 @@ declare interface IBksConfig {
                 quoted: any[];
             };
         };
+        firestore: {
+            allowSkipToLastPage: boolean;
+            autoRollbackWarningWindow: number;
+            connectionTimeout: number;
+            manualTransactionTimeout: number;
+            maxConnections: number;
+            maxReservedConnections: number;
+            paramTypes: {
+                named: any[];
+                numbered: any[];
+                positional: boolean;
+                quoted: any[];
+            };
+        };
         greengage: {
             allowSkipToLastPage: boolean;
             autoRollbackWarningWindow: number;

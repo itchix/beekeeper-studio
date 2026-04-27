@@ -1,7 +1,7 @@
 import { ValueTransformer } from 'typeorm';
 import Encryptor, { SimpleEncryptor } from 'simple-encryptor'
 import { AzureAuthOptions } from '../models/saved_connection';
-import { SurrealDBOptions } from '@/lib/db/types';
+import { SurrealDBOptions, FirestoreOptions } from '@/lib/db/types';
 import _ from 'lodash'
 import rawLog from '@bksLogger'
 
@@ -78,6 +78,29 @@ export class AzureCredsEncryptTransformer implements ValueTransformer {
 
     if (value?.clientSecret) {
       value.clientSecret = this.encryptor.decrypt(value.clientSecret);
+    }
+    return value;
+  }
+}
+
+export class FirestoreEncryptTransformer implements ValueTransformer {
+  private encryptor: SimpleEncryptor;
+
+  constructor(key: string) {
+    this.encryptor = Encryptor(key);
+  }
+
+  to(value: FirestoreOptions): FirestoreOptions {
+    const newVal = _.cloneDeep(value);
+    if (newVal?.serviceAccountJson) {
+      newVal.serviceAccountJson = this.encryptor.encrypt(newVal.serviceAccountJson);
+    }
+    return newVal;
+  }
+
+  from(value: FirestoreOptions): FirestoreOptions {
+    if (value?.serviceAccountJson) {
+      value.serviceAccountJson = this.encryptor.decrypt(value.serviceAccountJson);
     }
     return value;
   }
