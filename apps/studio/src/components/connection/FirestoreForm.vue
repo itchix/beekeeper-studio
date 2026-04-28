@@ -9,12 +9,11 @@
       </span>
     </div>
 
-    <!-- Authentication Method -->
     <div class="form-group">
       <label for="authType">Authentication Method</label>
       <select
         id="authType"
-        class="form-control custom-select"
+        class="form-control"
         v-model="authType"
       >
         <option v-for="t in authTypes" :key="t.value" :value="t.value">
@@ -23,7 +22,6 @@
       </select>
     </div>
 
-    <!-- Service Account JSON (direct paste) -->
     <div v-if="authType === 'serviceAccount'" class="form-group">
       <label for="serviceAccountJson">
         Service Account JSON
@@ -31,12 +29,11 @@
       </label>
       <textarea
         id="serviceAccountJson"
-        class="form-control"
+        class="form-control json-textarea"
         v-model="serviceAccountJson"
         @blur="onJsonBlur"
         placeholder='Paste your service account JSON key here...'
         rows="6"
-        style="font-family: monospace; font-size: 12px;"
       ></textarea>
       <small class="form-text text-muted">
         Paste the entire JSON key file contents. Get it from
@@ -46,7 +43,6 @@
       </small>
     </div>
 
-    <!-- Service Account File Path -->
     <div v-if="authType === 'serviceAccount'" class="form-group">
       <label for="serviceAccountPath">
         Or: Service Account File Path
@@ -65,7 +61,6 @@
       </small>
     </div>
 
-    <!-- Project ID (optional override) -->
     <div class="form-group">
       <label for="projectId">Project ID <small>(optional override)</small></label>
       <input
@@ -80,7 +75,6 @@
       </small>
     </div>
 
-    <!-- Database ID (for named databases) -->
     <div class="form-group">
       <label for="databaseId">Database ID</label>
       <input
@@ -98,7 +92,6 @@
 </template>
 
 <script lang="ts">
-import { PropType } from 'vue'
 import { FirestoreAuthType } from '@/lib/db/types'
 
 function firestoreOption(key: string) {
@@ -120,7 +113,7 @@ export default {
   name: 'FirestoreForm',
   props: {
     config: {
-      type: Object as PropType<any>,
+      type: Object,
       required: true,
     },
     testing: {
@@ -195,5 +188,10 @@ export default {
 
 .firestore-form textarea {
   resize: vertical;
+}
+
+.firestore-form .json-textarea {
+  font-family: monospace;
+  font-size: 12px;
 }
 </style>

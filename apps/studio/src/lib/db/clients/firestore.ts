@@ -1,6 +1,3 @@
-// Firestore database client for Beekeeper Studio
-// Provides Firefoo-like functionality for browsing and managing Google Firestore databases
-
 import {
   SupportedFeatures,
   TableOrView,
@@ -32,6 +29,7 @@ import {
   AppContextProvider,
   BaseQueryResult,
   BasicDatabaseClient,
+  NoOpContextProvider,
 } from "./BasicDatabaseClient";
 import { IDbConnectionServer } from "../backendTypes";
 import {
@@ -53,25 +51,8 @@ type FirestoreQueryResult = BaseQueryResult & {
   rowCount: number;
 };
 
-const firestoreContext: AppContextProvider = {
-  getExecutionContext() {
-    return undefined as any;
-  },
-  async logQuery() {
-    return undefined as any;
-  },
-};
+const firestoreContext: AppContextProvider = NoOpContextProvider;
 
-/**
- * FirestoreClient provides a Firefoo-like experience for browsing and managing
- * Google Cloud Firestore databases within Beekeeper Studio.
- *
- * Architecture mapping:
- * - Collections → Tables
- * - Documents → Rows
- * - Document fields → Columns
- * - Subcollections → Nested tables (shown as parentCollection/childCollection)
- */
 export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   private app: { delete(): Promise<void> } | null = null;
   private firestoreDb: Firestore | null = null;
@@ -95,81 +76,74 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   async connect(): Promise<void> {
     await super.connect();
 
-    try {
-      // Dynamic import to avoid bundling firebase-admin in the renderer
-      const { initializeApp, cert, applicationDefault, deleteApp } = await import(
-        "firebase-admin/app"
-      );
-      const { getFirestore } = await import("firebase-admin/firestore");
+    // Dynamic import to avoid bundling firebase-admin in the renderer
+    const { initializeApp, cert, applicationDefault, deleteApp } = await import(
+      "firebase-admin/app"
+    );
+    const { getFirestore } = await import("firebase-admin/firestore");
 
-      const authType =
-        this.firestoreOptions?.authType || FirestoreAuthType.ServiceAccount;
+    const authType =
+      this.firestoreOptions?.authType || FirestoreAuthType.ServiceAccount;
 
-      const appName = `bks-firestore-${Date.now()}`;
+    const appName = `bks-firestore-${Date.now()}`;
 
-      if (authType === FirestoreAuthType.ApplicationDefault) {
-        this.app = initializeApp({
-          credential: applicationDefault(),
-          projectId: this.firestoreOptions?.projectId || undefined,
-        }, appName);
-      } else {
-        // Service account authentication
-        let serviceAccount: any;
+    if (authType === FirestoreAuthType.ApplicationDefault) {
+      this.app = initializeApp({
+        credential: applicationDefault(),
+        projectId: this.firestoreOptions?.projectId || undefined,
+      }, appName);
+    } else {
+      let serviceAccount: any;
 
-        const jsonStr = this.firestoreOptions?.serviceAccountJson?.trim();
-        const filePath = this.firestoreOptions?.serviceAccountPath?.trim();
+      const jsonStr = this.firestoreOptions?.serviceAccountJson?.trim();
+      const filePath = this.firestoreOptions?.serviceAccountPath?.trim();
 
-        if (jsonStr) {
-          // Parse JSON directly from the config
-          try {
-            serviceAccount = JSON.parse(jsonStr);
-          } catch (_e) {
-            throw new Error(
-              "Invalid service account JSON. Please provide a valid JSON string."
-            );
-          }
-        } else if (filePath) {
-          // Read from file path
-          const fs = await import("fs/promises");
-          try {
-            const content = await fs.readFile(filePath, "utf-8");
-            serviceAccount = JSON.parse(content);
-          } catch (_e) {
-            throw new Error(
-              `Could not read service account file: ${filePath}`
-            );
-          }
-        } else {
+      if (jsonStr) {
+        try {
+          serviceAccount = JSON.parse(jsonStr);
+        } catch (_e) {
           throw new Error(
-            "Please provide a Service Account JSON key or file path in the connection settings, or switch to Application Default Credentials."
+            "Invalid service account JSON. Please provide a valid JSON string."
           );
         }
-
-        this.app = initializeApp({
-          credential: cert(serviceAccount),
-          projectId:
-            this.firestoreOptions?.projectId || serviceAccount.project_id,
-        }, appName);
+      } else if (filePath) {
+        const fs = await import("fs/promises");
+        try {
+          const content = await fs.readFile(filePath, "utf-8");
+          serviceAccount = JSON.parse(content);
+        } catch (_e) {
+          throw new Error(
+            `Could not read service account file: ${filePath}`
+          );
+        }
+      } else {
+        throw new Error(
+          "Please provide a Service Account JSON key or file path in the connection settings, or switch to Application Default Credentials."
+        );
       }
 
-      try {
-        const databaseId = this.firestoreOptions?.databaseId || "(default)";
-        this.firestoreDb = getFirestore(this.app, databaseId);
+      this.app = initializeApp({
+        credential: cert(serviceAccount),
+        projectId:
+          this.firestoreOptions?.projectId || serviceAccount.project_id,
+      }, appName);
+    }
 
-        // Test the connection by listing collections
-        await this._db.listCollections();
+    try {
+      const databaseId = this.firestoreOptions?.databaseId || "(default)";
+      this.firestoreDb = getFirestore(this.app, databaseId);
 
-        this.database.connected = true;
-        log.info("Connected to Firestore successfully");
-      } catch (err) {
-        // Clean up the Firebase app on failure
-        try { await deleteApp(this.app); } catch (_) { /* ignore */ }
-        this.app = null;
-        this.firestoreDb = null;
-        throw err;
-      }
-    } catch (error) {
-      throw error;
+      // Test the connection by listing collections
+      await this._db.listCollections();
+
+      this.database.connected = true;
+      log.info("Connected to Firestore successfully");
+    } catch (err) {
+      // Clean up the Firebase app on failure
+      try { await deleteApp(this.app); } catch (_) { /* ignore */ }
+      this.app = null;
+      this.firestoreDb = null;
+      throw err;
     }
   }
 
@@ -185,6 +159,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     this.app = null;
     this.firestoreDb = null;
     this.database.connected = false;
+    await super.disconnect();
   }
 
   async versionString(): Promise<string> {
@@ -216,10 +191,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     };
   }
 
-  // ==========================================
-  // Schema introspection - Collections as Tables
-  // ==========================================
-
   async listTables(_filter?: FilterOptions): Promise<TableOrView[]> {
     const collections = await this._db.listCollections();
 
@@ -232,7 +203,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   async listViews(_filter?: FilterOptions): Promise<TableOrView[]> {
-    // Firestore doesn't have views
     return [];
   }
 
@@ -332,8 +302,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   async listDatabases(_filter?: DatabaseFilterOptions): Promise<string[]> {
-    // Firestore supports named databases
-    // For now, return the current database
     const databaseId = this.firestoreOptions?.databaseId || "(default)";
     return [databaseId];
   }
@@ -378,10 +346,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return null;
   }
 
-  // ==========================================
-  // Query execution
-  // ==========================================
-
   async query(
     queryText: string,
     _tabId: number,
@@ -410,7 +374,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
   async selectTop(
     table: string,
-    offset: any,
+    offset: number,
     limit: number,
     orderBy: OrderBy[],
     filters: string | TableFilter[],
@@ -456,11 +420,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       query = query.orderBy("__name__", "asc");
     }
 
-    // Cursor-based pagination using startAfter instead of offset().
-    // offset() is expensive in Firestore — it reads and discards all skipped documents.
-    // The UI passes a pageState string (or null for the first page) as the offset parameter
-    // when usesOffsetPagination is false. The pageState encodes the last document's ID
-    // from the previous page, allowing startAfter to resume efficiently.
+    // Cursor pagination: use startAfter with last doc ID instead of expensive offset()
     if (offset != null && offset !== 0 && typeof offset === "string") {
       try {
         const cursorData = JSON.parse(offset);
@@ -482,8 +442,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       query = query.offset(offset);
     }
 
-    // The UI already passes limit + 1 to detect hasNextPage, so we use it directly.
-    // We fetch `limit` rows; the UI checks if result.length > this.limit to detect next page.
     query = query.limit(limit);
 
     const snapshot = await query.get();
@@ -499,9 +457,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
     const fields = this._inferBksFields(rows);
 
-    // Build pageState for cursor-based pagination: encode the last document's ID
-    // so the next page can use startAfter(). Always provide a pageState when there
-    // are results, so the UI can navigate to the next page.
+    // Encode last doc ID for next page cursor
     let pageState: string | null = null;
     if (docs.length > 0) {
       const lastDoc = docs[docs.length - 1];
@@ -549,10 +505,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   async queryStream(_query: string, _chunkSize: number): Promise<StreamResults> {
     throw new Error("Streaming is not supported for Firestore");
   }
-
-  // ==========================================
-  // Data modification
-  // ==========================================
 
   async executeApplyChanges(
     changes: TableChanges,
@@ -640,10 +592,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return results;
   }
 
-  // ==========================================
-  // DDL operations (mostly unsupported for Firestore)
-  // ==========================================
-
   async createDatabase(
     _databaseName: string,
     _charset: string,
@@ -721,8 +669,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   async alterTable(_change: AlterTableSpec): Promise<void> {
-    // Schema changes are implicit in Firestore
-    log.info("alterTable called but Firestore has no schema to alter");
+    throw new Error("Alter table is not supported for Firestore");
   }
 
   async setTableDescription(
@@ -768,9 +715,14 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     const destCollection = this._db.collection(duplicateTableName);
     const BATCH_SIZE = 500;
 
+    let lastDoc: any = null;
     let hasMore = true;
     while (hasMore) {
-      const snapshot = await sourceCollection.limit(BATCH_SIZE).get();
+      let query = sourceCollection.limit(BATCH_SIZE);
+      if (lastDoc) {
+        query = query.startAfter(lastDoc);
+      }
+      const snapshot = await query.get();
       if (snapshot.empty) {
         hasMore = false;
         break;
@@ -778,10 +730,14 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
       const batch = this._db.batch();
       snapshot.docs.forEach((doc: any) => {
-        const destDocRef = destCollection.doc(doc.id);
-        batch.set(destDocRef, doc.data());
+        batch.set(destCollection.doc(doc.id), doc.data());
       });
       await batch.commit();
+
+      lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      if (snapshot.docs.length < BATCH_SIZE) {
+        hasMore = false;
+      }
     }
   }
 
@@ -800,10 +756,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       "Not supported: Firestore does not support truncating all collections at once"
     );
   }
-
-  // ==========================================
-  // Unsupported operations
-  // ==========================================
 
   async listMaterializedViewColumns(
     _table: string,
@@ -937,10 +889,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     };
   }
 
-  // ==========================================
-  // Private helpers
-  // ==========================================
-
   private async _getFirebaseClasses(): Promise<{ TimestampClass: any; GeoPointClass: any }> {
     try {
       const firestoreModule = await import("firebase-admin/firestore");
@@ -970,13 +918,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
   }
 
-  /**
-   * Execute a Firestore query from the editor.
-   * Supports JavaScript-like syntax:
-   *   db.collection('users').where('age', '>=', 18).limit(10)
-   *   db.collection('users').get()
-   *   db.collectionGroup('orders').where('status', '==', 'pending').get()
-   */
   private async _executeFirestoreQuery(
     queryText: string
   ): Promise<NgQueryResult> {
@@ -1136,13 +1077,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return { field, op, value };
   }
 
-  /**
-   * Parse a raw filter string in "field op value" format.
-   * Supports: field = value, field > value, field >= value, etc.
-   * Values can be quoted (single or double) or unquoted.
-   * Numeric and boolean values are auto-coerced.
-   * Examples: "status = active", "age > 30", 'name == "John Doe"'
-   */
   private _parseRawFilter(input: string): { field: string; op: string; value: any } | null {
     // Match: field, operator, value (with optional quotes)
     const match = input.match(/^(\S+)\s*(==|=|!=|<>|<|<=|>|>=)\s*(.+)$/);
@@ -1202,12 +1136,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     );
   }
 
-  /**
-   * Flatten nested Firestore data for table display.
-   * Converts Timestamps to human-readable ISO strings,
-   * GeoPoints to "lat,lng" format, maps to dot-notation keys,
-   * and arrays to JSON strings.
-   */
   private _flattenForTable(
     data: any,
     prefix: string = ""
@@ -1247,10 +1175,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return result;
   }
 
-  /**
-   * Format a Date object as a human-readable string.
-   * e.g. "2024-01-15 14:30:00" instead of raw ISO format
-   */
   private _formatDate(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1262,9 +1186,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${ms}`;
   }
 
-  /**
-   * Check if a value is a Firestore DocumentReference.
-   */
   private _isFirestoreDocumentReference(value: any): boolean {
     return (
       value &&
@@ -1275,11 +1196,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     );
   }
 
-  /**
-   * Unflatten dot-notation keys back to nested objects for Firestore writes.
-   * For inserts (no column type info), uses heuristic detection.
-   * For updates, prefer _convertValueForSave which uses known column types.
-   */
   private async _unflattenForFirestore(
     data: Record<string, any>
   ): Promise<Record<string, any>> {
@@ -1308,10 +1224,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return result;
   }
 
-  /**
-   * Convert a value for insert operations where we don't have column type info.
-   * Uses heuristic detection: only converts strings that match our known formats.
-   */
   private _convertValueForInsert(
     value: any,
     TimestampClass: any,
@@ -1358,11 +1270,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return value;
   }
 
-  /**
-   * Convert a value for saving to Firestore, using known column type info.
-   * This is the reliable round-trip: we know the column type from schema inference,
-   * so we can convert back with certainty instead of guessing from string patterns.
-   */
   private _convertValueForSave(
     value: any,
     isTimestamp: boolean,
@@ -1430,10 +1337,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return value;
   }
 
-  /**
-   * Recursively convert values in a parsed object for Firestore writes.
-   * Detects date strings in object values that match our format.
-   */
   private _convertObjectForSave(
     obj: any,
     TimestampClass: any,
@@ -1456,10 +1359,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return obj;
   }
 
-  /**
-   * Parse a date string in either "YYYY-MM-DD HH:mm:ss.SSS" or ISO format.
-   * Returns a Date object if the string looks like a date, null otherwise.
-   */
   private _parseDateString(value: string): Date | null {
     // Match "YYYY-MM-DD HH:mm:ss" or "YYYY-MM-DD HH:mm:ss.SSS"
     const datetimeMatch = value.match(
@@ -1492,9 +1391,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return null;
   }
 
-  /**
-   * Collect field names and types from a document for schema inference.
-   */
   private _flattenFields(
     data: any,
     fieldMap: Map<string, Set<string>>,
@@ -1536,9 +1432,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
   }
 
-  /**
-   * Infer BksField descriptors for table display.
-   */
   private _inferBksFields(rows: any[]): BksField[] {
     if (rows.length === 0) return [];
 
@@ -1555,9 +1448,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }));
   }
 
-  /**
-   * Infer field descriptors from result rows for query results.
-   */
   private _inferFieldDescriptors(rows: any[]): FieldDescriptor[] {
     if (rows.length === 0) return [];
 
@@ -1593,11 +1483,10 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     };
   }
 
-  async getBuilder(
+  getBuilder(
     _table: string,
     _schema?: string
-  ): Promise<ChangeBuilderBase> {
-    // Firestore doesn't use SQL change builders
-    return null as any;
+  ): ChangeBuilderBase {
+    throw new Error("Not supported for Firestore");
   }
 }
