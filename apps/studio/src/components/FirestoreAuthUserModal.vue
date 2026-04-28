@@ -14,6 +14,27 @@
           {{ error }}
         </div>
 
+        <div v-if="isEditing" class="form-group">
+          <label>UID</label>
+          <div class="uid-readonly-wrap">
+            <input
+              type="text"
+              class="form-control uid-readonly-input"
+              :value="user?.uid"
+              readonly
+              ref="uidInput"
+              @click="$refs.uidInput.select()"
+            />
+            <button
+              class="btn btn-flat btn-icon-only copy-btn"
+              title="Copy UID"
+              @click="copyUid"
+            >
+              <i class="material-icons">content_copy</i>
+            </button>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="auth-email">Email <span class="required">*</span></label>
           <input
@@ -168,6 +189,15 @@ export default Vue.extend({
         this.deleting = false
       }
     },
+    copyUid() {
+      if (!this.user?.uid) return
+      try {
+        this.$copyText(this.user.uid)
+        this.$noty.success('UID copied to clipboard')
+      } catch {
+        this.$noty.error('Failed to copy UID')
+      }
+    },
   },
   mounted() {
     if (this.user) {
@@ -285,6 +315,43 @@ export default Vue.extend({
 
       input[type="checkbox"] {
         margin: 0;
+      }
+    }
+  }
+
+  .uid-readonly-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+
+    .uid-readonly-input {
+      flex: 1;
+      font-family: monospace;
+      font-size: 0.8125rem;
+      cursor: text;
+      user-select: all;
+      background: var(--query-editor-bg);
+      color: var(--text);
+      border-color: var(--border-color);
+    }
+
+    .copy-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: none;
+
+      .material-icons {
+        font-size: 1rem;
+        color: var(--text-light);
+      }
+
+      &:hover .material-icons {
+        color: var(--text-dark);
       }
     }
   }
