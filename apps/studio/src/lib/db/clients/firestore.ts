@@ -216,7 +216,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   ): Promise<ExtendedTableColumn[]> {
     if (!table) return [];
 
-    // Sample documents to infer schema
     const snapshot = await this.firestoreClient.collection(table).limit(10).get();
 
     if (snapshot.empty) {
@@ -255,7 +254,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         bksField: { name: fieldName, bksType: "UNKNOWN" },
       });
 
-      // Track Firestore special types for round-trip conversion
       const columnKey = `${table}.${fieldName}`;
       if (types.has("timestamp")) {
         this.timestampColumns.add(columnKey);
@@ -268,7 +266,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    // Always include document ID
     columns.unshift({
       ordinalPosition: 0,
       columnName: "__name__",
@@ -383,7 +380,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   ): Promise<TableResult> {
     let query: any = this.firestoreClient.collection(table);
 
-    // Apply filters
     if (typeof filters === "string" && filters.trim()) {
       const parsed = this.parseRawFilter(filters.trim());
       if (parsed) {
@@ -408,7 +404,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    // Apply ordering
     // Firestore requires orderBy for descending sorts and for startAfter/limit with filters.
     // If no orderBy is specified, default to ascending by document ID.
     if (orderBy && orderBy.length > 0) {
@@ -457,7 +452,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
     const fields = this.inferBksFields(rows);
 
-    // Encode last doc ID for next page cursor
     let pageState: string | null = null;
     if (docs.length > 0) {
       const lastDoc = docs[docs.length - 1];
@@ -514,7 +508,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
     const { TimestampClass, GeoPointClass } = await this.getFirebaseClasses();
 
-    // Handle inserts
     if (changes.inserts?.length) {
       for (const insert of changes.inserts) {
         for (const row of insert.data) {
@@ -533,7 +526,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    // Handle updates
     if (changes.updates?.length) {
       for (const update of changes.updates) {
         const docId = update.primaryKeys.find(
@@ -541,7 +533,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         )?.value;
         if (!docId) continue;
 
-        // Determine the column type for proper conversion
         const columnKey = `${update.table}.${update.column}`;
         const isTimestamp = this.timestampColumns.has(columnKey) ||
           update.columnType === "timestamp" ||
@@ -574,7 +565,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    // Handle deletes
     if (changes.deletes?.length) {
       for (const del of changes.deletes) {
         const docId = del.primaryKeys.find(
@@ -826,11 +816,9 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   async syncDatabase(): Promise<void> {
-    // Refresh collections cache
     await this.firestoreClient.listCollections();
   }
 
-  // Import/export stubs
   async importStepZero(_table: TableOrView): Promise<any> {
     return {};
   }
@@ -924,7 +912,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     const trimmed = queryText.trim();
 
     try {
-      // Handle collection listing
       if (trimmed === "list collections" || trimmed === "show collections") {
         const collections = await this.firestoreClient.listCollections();
         const rows = collections.map((c: any) => ({ collection: c.id }));
@@ -937,8 +924,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         };
       }
 
-      // Parse and execute Firestore query
-      // Support: db.collection('X').where('field', 'op', value).limit(N).get()
       const result = await this.parseAndExecuteQuery(trimmed);
       return result;
     } catch (error) {
@@ -950,10 +935,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   private async parseAndExecuteQuery(
     queryText: string
   ): Promise<NgQueryResult> {
-    // Simple query parser for Firestore
-    // Supports: db.collection('name').where('field', 'op', value).orderBy('field').limit(N).get()
-    // Also: db.collectionGroup('name').where(...).get()
-
     const collectionMatch = queryText.match(
       /db\.collection\(['"]([^'"]+)['"]\)/
     );
@@ -983,7 +964,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    // Parse where clauses
     const whereRegex =
       /\.where\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*,\s*([^)]+)\s*\)/g;
     let match;
@@ -993,7 +973,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       query = query.where(field, op, value);
     }
 
-    // Parse orderBy
     const orderByRegex =
       /\.orderBy\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]+)['"])?\s*\)/g;
     while ((match = orderByRegex.exec(queryText)) !== null) {
@@ -1001,21 +980,18 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       query = query.orderBy(field, direction || "asc");
     }
 
-    // Parse limit
     const limitMatch = queryText.match(/\.limit\(\s*(\d+)\s*\)/);
     if (limitMatch) {
       const limitVal = parseInt(limitMatch[1], 10);
       if (!isNaN(limitVal) && limitVal > 0) query = query.limit(limitVal);
     }
 
-    // Parse offset
     const offsetMatch = queryText.match(/\.offset\(\s*(\d+)\s*\)/);
     if (offsetMatch) {
       const offsetVal = parseInt(offsetMatch[1], 10);
       if (!isNaN(offsetVal) && offsetVal > 0) query = query.offset(offsetVal);
     }
 
-    // Execute the query
     const snapshot = await query.get();
 
     const rows = snapshot.docs.map((doc: any) => {
@@ -1036,7 +1012,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   private parseValue(valueStr: string): any {
-    // Remove surrounding quotes if present
     const trimmed = valueStr.trim();
 
     if (trimmed === "") return "";
@@ -1048,7 +1023,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     if (trimmed === "null") return null;
     if (!isNaN(Number(trimmed))) return Number(trimmed);
 
-    // Try JSON parse for objects/arrays
     try {
       return JSON.parse(trimmed);
     } catch {
@@ -1078,18 +1052,15 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   private parseRawFilter(input: string): { field: string; op: string; value: any } | null {
-    // Match: field, operator, value (with optional quotes)
     const match = input.match(/^(\S+)\s*(==|=|!=|<>|<|<=|>|>=)\s*(.+)$/);
     if (!match) return null;
 
     const [, field, rawOp, rawValue] = match;
 
-    // Strip surrounding quotes from value
     let value: any = rawValue.trim();
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     } else {
-      // Auto-coerce unquoted values
       if (!isNaN(Number(value))) value = Number(value);
       else if (value === "true") value = true;
       else if (value === "false") value = false;
@@ -1254,7 +1225,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         );
       }
 
-      // Try JSON parse for objects/arrays
       try {
         const parsed = JSON.parse(value);
         if (typeof parsed === "object" && parsed !== null) {
@@ -1282,7 +1252,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       return null;
     }
 
-    // Timestamp columns: parse date string → Firestore Timestamp
     if (isTimestamp && typeof value === "string") {
       const dateValue = this.parseDateString(value);
       if (dateValue) {
@@ -1294,7 +1263,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    // GeoPoint columns: parse "lat, lng" string → Firestore GeoPoint
     if (isGeopoint && typeof value === "string") {
       const geoMatch = value.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
       if (geoMatch && GeoPointClass) {
@@ -1305,7 +1273,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    // Reference columns: string path → Firestore DocumentReference
     if (isReference && typeof value === "string") {
       // DocumentReference paths look like "collection/document"
       const parts = value.split("/");
@@ -1318,7 +1285,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    // For all other values, try JSON parse for objects/arrays
     if (typeof value === "string") {
       try {
         const parsed = JSON.parse(value);
@@ -1360,7 +1326,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   private parseDateString(value: string): Date | null {
-    // Match "YYYY-MM-DD HH:mm:ss" or "YYYY-MM-DD HH:mm:ss.SSS"
     const datetimeMatch = value.match(
       /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/
     );
@@ -1377,7 +1342,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       );
     }
 
-    // Match ISO format "YYYY-MM-DDTHH:mm:ss.sssZ" or similar
     const isoMatch = value.match(
       /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/
     );
@@ -1417,7 +1381,6 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       } else if (Array.isArray(value)) {
         if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
         fieldMap.get(fullKey)!.add("array");
-        // Also flatten array elements if they're objects
         if (value.length > 0 && typeof value[0] === "object" && value[0] !== null) {
           this.flattenFields(value[0], fieldMap, `${fullKey}[]`);
         }
