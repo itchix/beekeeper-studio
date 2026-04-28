@@ -155,6 +155,30 @@ export interface FirestoreOptions {
   databaseId?: string;
 }
 
+export interface FirestoreAuthUser {
+  uid: string
+  email: string
+  displayName: string
+  disabled: boolean
+  emailVerified: boolean
+  creationTime: string
+  lastSignInTime: string
+}
+
+export interface CreateFirestoreAuthUserRequest {
+  email: string
+  password: string
+  displayName?: string
+  disabled?: boolean
+}
+
+export interface UpdateFirestoreAuthUserRequest {
+  email?: string
+  password?: string
+  displayName?: string
+  disabled?: boolean
+}
+
 export enum SurrealAuthType {
   Root,
   Namespace,
