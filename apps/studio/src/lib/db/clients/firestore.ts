@@ -400,10 +400,24 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     let query: any = this.firestoreDb.collection(table);
 
     // Apply filters
-    if (Array.isArray(filters)) {
+    if (typeof filters === "string" && filters.trim()) {
+      // Raw filter string: parse "field op value" format
+      // e.g. "status = active", "age > 30", 'name == "John"'
+      const parsed = this._parseRawFilter(filters.trim());
+      if (parsed) {
+        query = query.where(parsed.field, parsed.op, parsed.value);
+      }
+    } else if (Array.isArray(filters)) {
       for (const filter of filters) {
         if (filter.type === "raw") {
-          // Skip raw filters for Firestore
+          // Parse raw filter value as "field op value"
+          const rawValue = typeof filter.value === "string" ? filter.value : "";
+          if (rawValue.trim()) {
+            const parsed = this._parseRawFilter(rawValue.trim());
+            if (parsed) {
+              query = query.where(parsed.field, parsed.op, parsed.value);
+            }
+          }
           continue;
         }
         const { field, op, value } = this._parseFilter(filter);
@@ -1056,22 +1070,65 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   private _parseFilter(filter: any): { field: string; op: string; value: any } {
-    if (filter.type === "filter") {
-      // Standard Beekeeper filter format
-      const field = filter.field || filter.column;
-      const op = this._translateOperator(filter.op || filter.type);
-      let value = filter.value;
+    // Beekeeper filter format: { field, type: "="|"!="|"<"|..., value, op: "AND"|"OR" }
+    // `type` is the comparison operator, `op` is the logical combinator (AND/OR).
+    // Also handle legacy format where type === "filter" and op holds the comparison.
+    const field = filter.field || filter.column;
+    if (!field) return { field: "", op: "==", value: null };
 
-      // Handle type coercion
-      if (typeof value === "string") {
-        if (!isNaN(Number(value))) value = Number(value);
-        else if (value === "true") value = true;
-        else if (value === "false") value = false;
-      }
+    // The comparison operator is in `type` for standard filters (=, !=, <, etc.)
+    // or in `op` for legacy "filter" type
+    const comparisonOp = filter.type !== "filter" ? filter.type : filter.op;
 
-      return { field, op, value };
+    // Handle "is" / "is not" null checks — Firestore uses == null / != null
+    if (comparisonOp === "is") {
+      return { field, op: "==", value: null };
     }
-    return { field: "", op: "==", value: null };
+    if (comparisonOp === "is not") {
+      return { field, op: "!=", value: null };
+    }
+
+    const op = this._translateOperator(comparisonOp);
+    let value = filter.value;
+
+    // Handle type coercion
+    if (typeof value === "string") {
+      if (!isNaN(Number(value))) value = Number(value);
+      else if (value === "true") value = true;
+      else if (value === "false") value = false;
+    }
+
+    return { field, op, value };
+  }
+
+  /**
+   * Parse a raw filter string in "field op value" format.
+   * Supports: field = value, field > value, field >= value, etc.
+   * Values can be quoted (single or double) or unquoted.
+   * Numeric and boolean values are auto-coerced.
+   * Examples: "status = active", "age > 30", 'name == "John Doe"'
+   */
+  private _parseRawFilter(input: string): { field: string; op: string; value: any } | null {
+    // Match: field, operator, value (with optional quotes)
+    const match = input.match(/^(\S+)\s*(==|=|!=|<>|<|<=|>|>=)\s*(.+)$/);
+    if (!match) return null;
+
+    const [, field, rawOp, rawValue] = match;
+
+    // Strip surrounding quotes from value
+    let value: any = rawValue.trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    } else {
+      // Auto-coerce unquoted values
+      if (!isNaN(Number(value))) value = Number(value);
+      else if (value === "true") value = true;
+      else if (value === "false") value = false;
+      else if (value === "null") value = null;
+    }
+
+    const op = this._translateOperator(rawOp);
+    return { field, op, value };
   }
 
   private _translateOperator(op: string): string {

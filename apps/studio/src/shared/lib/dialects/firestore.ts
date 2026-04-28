@@ -11,12 +11,12 @@ export const FirestoreData: DialectData = {
   usesOffsetPagination: true,
   queryDialectOverride: 'generic',
   textEditorMode: 'text/x-javascript',
-  rawFilterPlaceholder: 'Field path',
+  rawFilterPlaceholder: "field = value  (e.g. status = active, age > 30)",
   disabledFeatures: {
     manualCommit: true,
     resultEditing: false,
     readOnlyPrimaryKeys: true,
-    builderFilters: true,
+    builderFilters: false,
     shell: true,
     informationSchema: {
       extra: true,
