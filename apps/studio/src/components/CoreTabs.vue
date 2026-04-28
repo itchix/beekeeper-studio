@@ -388,6 +388,9 @@ export default Vue.extend({
         await this.createQuery()
       }
       wait(800).then(() => this.$tour.start("connectedScreen"));
+    },
+    '$store.state._firestoreAuthRequest'() {
+      this.openFirestoreAuth();
     }
   },
   filters: {
@@ -459,7 +462,6 @@ export default Vue.extend({
         { event: AppEvent.beginImport, handler: this.beginImport },
         { event: AppEvent.restoreDatabase, handler: this.restoreDatabase },
         { event: AppEvent.switchUserKeymap, handler: this.switchUserKeymap },
-        { event: AppEvent.loadFirestoreAuth, handler: this.openFirestoreAuth },
       ]
     },
     lastTab() {

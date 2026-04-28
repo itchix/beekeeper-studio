@@ -103,6 +103,9 @@ export interface State {
   connError: string
   expandFKDetailsByDefault: boolean,
 
+  // Firebase Auth only
+  _firestoreAuthRequest: number,
+
   // SurrealDB only
   namespace: Nullable<string>,
   namespaceList: string[],
@@ -168,6 +171,7 @@ const store = new Vuex.Store<State>({
     versionString: null,
     connError: null,
     expandFKDetailsByDefault: SmartLocalStorage.getBool('expandFKDetailsByDefault'),
+    _firestoreAuthRequest: 0,
     namespace: null,
     namespaceList: [],
     pluginManagerStatus: "initializing",
@@ -446,6 +450,9 @@ const store = new Vuex.Store<State>({
     },
     webPluginManagerStatus(state, status: WebPluginManagerStatus) {
       state.pluginManagerStatus = status
+    },
+    _firestoreAuthRequest(state, timestamp: number) {
+      state._firestoreAuthRequest = timestamp;
     },
   },
   actions: {
@@ -739,6 +746,9 @@ const store = new Vuex.Store<State>({
         key: "tabDropdownAIShellHintShown",
         value: new Date(),
       });
+    },
+    requestFirestoreAuthTab(context) {
+      context.commit('_firestoreAuthRequest', Date.now());
     },
   },
   plugins: []
