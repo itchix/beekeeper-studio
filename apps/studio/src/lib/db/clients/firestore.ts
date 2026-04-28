@@ -42,7 +42,11 @@ import {
   UpdateFirestoreAuthUserRequest,
 } from "../types";
 import { ChangeBuilderBase } from "@shared/lib/sql/change_builder/ChangeBuilderBase";
-import { CreateTableSpec, TableKey, AlterTableSpec } from "@shared/lib/dialects/models";
+import {
+  CreateTableSpec,
+  TableKey,
+  AlterTableSpec,
+} from "@shared/lib/dialects/models";
 import rawLog from "@bksLogger";
 import type { Firestore } from "@google-cloud/firestore";
 
@@ -92,10 +96,13 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     const appName = `bks-firestore-${Date.now()}`;
 
     if (authType === FirestoreAuthType.ApplicationDefault) {
-      this.app = initializeApp({
-        credential: applicationDefault(),
-        projectId: this.firestoreOptions?.projectId || undefined,
-      }, appName);
+      this.app = initializeApp(
+        {
+          credential: applicationDefault(),
+          projectId: this.firestoreOptions?.projectId || undefined,
+        },
+        appName
+      );
     } else {
       let serviceAccount: any;
 
@@ -116,9 +123,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
           const content = await fs.readFile(filePath, "utf-8");
           serviceAccount = JSON.parse(content);
         } catch (_e) {
-          throw new Error(
-            `Could not read service account file: ${filePath}`
-          );
+          throw new Error(`Could not read service account file: ${filePath}`);
         }
       } else {
         throw new Error(
@@ -126,11 +131,14 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         );
       }
 
-      this.app = initializeApp({
-        credential: cert(serviceAccount),
-        projectId:
-          this.firestoreOptions?.projectId || serviceAccount.project_id,
-      }, appName);
+      this.app = initializeApp(
+        {
+          credential: cert(serviceAccount),
+          projectId:
+            this.firestoreOptions?.projectId || serviceAccount.project_id,
+        },
+        appName
+      );
     }
 
     try {
@@ -146,7 +154,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       log.info("Connected to Firestore successfully");
     } catch (err) {
       // Clean up the Firebase app on failure
-      try { await deleteApp(this.app); } catch (_) { /* ignore */ }
+      try {
+        await deleteApp(this.app);
+      } catch (_) {
+        /* ignore */
+      }
       this.app = null;
       this.firestoreDb = null;
       throw err;
@@ -222,7 +234,10 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   ): Promise<ExtendedTableColumn[]> {
     if (!table) return [];
 
-    const snapshot = await this.firestoreClient.collection(table).limit(10).get();
+    const snapshot = await this.firestoreClient
+      .collection(table)
+      .limit(10)
+      .get();
 
     if (snapshot.empty) {
       return [
@@ -249,7 +264,8 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     let ordinalPosition = 1;
     for (const [fieldName, types] of fieldMap) {
       const typeArr = Array.from(types);
-      const primaryType = typeArr.length === 1 ? typeArr[0] : typeArr.join(" | ");
+      const primaryType =
+        typeArr.length === 1 ? typeArr[0] : typeArr.join(" | ");
       columns.push({
         ordinalPosition: ordinalPosition++,
         columnName: fieldName,
@@ -414,7 +430,8 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     // If no orderBy is specified, default to ascending by document ID.
     if (orderBy && orderBy.length > 0) {
       for (const order of orderBy) {
-        const dir = (order.dir || "ASC").toUpperCase() === "DESC" ? "desc" : "asc";
+        const dir =
+          (order.dir || "ASC").toUpperCase() === "DESC" ? "desc" : "asc";
         query = query.orderBy(order.field, dir);
       }
     } else {
@@ -426,14 +443,17 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       try {
         const cursorData = JSON.parse(offset);
         // Must include the collection path for a valid document reference
-        const cursorDoc = this.firestoreClient.collection(table).doc(cursorData.__name__);
+        const cursorDoc = this.firestoreClient
+          .collection(table)
+          .doc(cursorData.__name__);
         const cursorSnapshot = await cursorDoc.get();
         if (cursorSnapshot.exists) {
           query = query.startAfter(cursorSnapshot);
         }
       } catch {
         // If cursor parsing fails, fall back to numeric offset
-        const numericOffset = typeof offset === "number" ? offset : parseInt(offset, 10);
+        const numericOffset =
+          typeof offset === "number" ? offset : parseInt(offset, 10);
         if (numericOffset > 0) {
           query = query.offset(numericOffset);
         }
@@ -502,7 +522,10 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     throw new Error("Streaming is not supported for Firestore");
   }
 
-  async queryStream(_query: string, _chunkSize: number): Promise<StreamResults> {
+  async queryStream(
+    _query: string,
+    _chunkSize: number
+  ): Promise<StreamResults> {
     throw new Error("Streaming is not supported for Firestore");
   }
 
@@ -540,13 +563,16 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         if (!docId) continue;
 
         const columnKey = `${update.table}.${update.column}`;
-        const isTimestamp = this.timestampColumns.has(columnKey) ||
+        const isTimestamp =
+          this.timestampColumns.has(columnKey) ||
           update.columnType === "timestamp" ||
           update.columnObject?.dataType === "timestamp";
-        const isGeopoint = this.geopointColumns.has(columnKey) ||
+        const isGeopoint =
+          this.geopointColumns.has(columnKey) ||
           update.columnType === "geopoint" ||
           update.columnObject?.dataType === "geopoint";
-        const isReference = this.referenceColumns.has(columnKey) ||
+        const isReference =
+          this.referenceColumns.has(columnKey) ||
           update.columnType === "reference" ||
           update.columnObject?.dataType === "reference";
 
@@ -607,10 +633,13 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   async createTable(table: CreateTableSpec): Promise<void> {
     // In Firestore, collections are created implicitly when documents are added
     // We create a placeholder document
-    await this.firestoreClient.collection(table.table).doc("__placeholder__").set({
-      __created__: true,
-      __createdAt__: new Date(),
-    });
+    await this.firestoreClient
+      .collection(table.table)
+      .doc("__placeholder__")
+      .set({
+        __created__: true,
+        __createdAt__: new Date(),
+      });
   }
 
   async dropElement(
@@ -883,10 +912,16 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     };
   }
 
-  private async getFirebaseClasses(): Promise<{ TimestampClass: any; GeoPointClass: any }> {
+  private async getFirebaseClasses(): Promise<{
+    TimestampClass: any;
+    GeoPointClass: any;
+  }> {
     try {
       const firestoreModule = await import("firebase-admin/firestore");
-      return { TimestampClass: firestoreModule.Timestamp, GeoPointClass: firestoreModule.GeoPoint };
+      return {
+        TimestampClass: firestoreModule.Timestamp,
+        GeoPointClass: firestoreModule.GeoPoint,
+      };
     } catch {
       return { TimestampClass: null, GeoPointClass: null };
     }
@@ -1057,14 +1092,19 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     return { field, op, value };
   }
 
-  private parseRawFilter(input: string): { field: string; op: string; value: any } | null {
+  private parseRawFilter(
+    input: string
+  ): { field: string; op: string; value: any } | null {
     const match = input.match(/^(\S+)\s*(==|=|!=|<>|<|<=|>|>=)\s*(.+)$/);
     if (!match) return null;
 
     const [, field, rawOp, rawValue] = match;
 
     let value: any = rawValue.trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     } else {
       if (!isNaN(Number(value))) value = Number(value);
@@ -1113,10 +1153,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     );
   }
 
-  private flattenForTable(
-    data: any,
-    prefix: string = ""
-  ): Record<string, any> {
+  private flattenForTable(data: any, prefix = ""): Record<string, any> {
     const result: Record<string, any> = {};
 
     for (const [key, value] of Object.entries(data)) {
@@ -1132,14 +1169,13 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         result[fullKey] = this.formatDate((value as any).toDate());
       } else if (this.isFirestoreGeoPoint(value)) {
         // Firestore GeoPoint — format as "lat, lng"
-        result[fullKey] = `${(value as any).latitude}, ${(value as any).longitude}`;
+        result[fullKey] = `${(value as any).latitude}, ${
+          (value as any).longitude
+        }`;
       } else if (this.isFirestoreDocumentReference(value)) {
         // Firestore DocumentReference — show the path
         result[fullKey] = (value as any).path;
-      } else if (
-        typeof value === "object" &&
-        !Array.isArray(value)
-      ) {
+      } else if (typeof value === "object" && !Array.isArray(value)) {
         // Nested map — flatten recursively
         Object.assign(result, this.flattenForTable(value, fullKey));
       } else if (Array.isArray(value)) {
@@ -1194,7 +1230,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
 
       const lastPart = parts[parts.length - 1];
-      const convertedValue = this.convertValueForInsert(value, TimestampClass, GeoPointClass);
+      const convertedValue = this.convertValueForInsert(
+        value,
+        TimestampClass,
+        GeoPointClass
+      );
       current[lastPart] = convertedValue;
     }
 
@@ -1234,7 +1274,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       try {
         const parsed = JSON.parse(value);
         if (typeof parsed === "object" && parsed !== null) {
-          return this.convertObjectForSave(parsed, TimestampClass, GeoPointClass);
+          return this.convertObjectForSave(
+            parsed,
+            TimestampClass,
+            GeoPointClass
+          );
         }
       } catch {
         // Not JSON, keep as string
@@ -1316,14 +1360,28 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   ): any {
     if (Array.isArray(obj)) {
       return obj.map((v) =>
-        this.convertValueForSave(v, false, false, false, TimestampClass, GeoPointClass)
+        this.convertValueForSave(
+          v,
+          false,
+          false,
+          false,
+          TimestampClass,
+          GeoPointClass
+        )
       );
     }
 
     if (obj !== null && typeof obj === "object") {
       const result: Record<string, any> = {};
       for (const [k, v] of Object.entries(obj)) {
-        result[k] = this.convertValueForSave(v, false, false, false, TimestampClass, GeoPointClass);
+        result[k] = this.convertValueForSave(
+          v,
+          false,
+          false,
+          false,
+          TimestampClass,
+          GeoPointClass
+        );
       }
       return result;
     }
@@ -1364,7 +1422,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   private flattenFields(
     data: any,
     fieldMap: Map<string, Set<string>>,
-    prefix: string = ""
+    prefix = ""
   ): void {
     for (const [key, value] of Object.entries(data)) {
       const fullKey = prefix ? `${prefix}.${key}` : key;
@@ -1387,7 +1445,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       } else if (Array.isArray(value)) {
         if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
         fieldMap.get(fullKey)!.add("array");
-        if (value.length > 0 && typeof value[0] === "object" && value[0] !== null) {
+        if (
+          value.length > 0 &&
+          typeof value[0] === "object" &&
+          value[0] !== null
+        ) {
           this.flattenFields(value[0], fieldMap, `${fullKey}[]`);
         }
       } else if (typeof value === "object" && value !== null) {
@@ -1446,52 +1508,56 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     };
   }
 
-  getBuilder(
-    _table: string,
-    _schema?: string
-  ): ChangeBuilderBase {
+  getBuilder(_table: string, _schema?: string): ChangeBuilderBase {
     throw new Error("Not supported for Firestore");
   }
 
-  async listAuthUsers(pageToken?: string): Promise<{ users: FirestoreAuthUser[], nextPageToken?: string }> {
+  async listAuthUsers(
+    pageToken?: string
+  ): Promise<{ users: FirestoreAuthUser[]; nextPageToken?: string }> {
     const result = await this.authClient.listUsers(1000, pageToken);
     return {
       users: result.users.map((u: any) => ({
         uid: u.uid,
-        email: u.email ?? '',
-        displayName: u.displayName ?? '',
+        email: u.email ?? "",
+        displayName: u.displayName ?? "",
         disabled: u.disabled,
         emailVerified: u.emailVerified,
         creationTime: u.metadata.creationTime,
-        lastSignInTime: u.metadata.lastSignInTime ?? '',
+        lastSignInTime: u.metadata.lastSignInTime ?? "",
       })),
       nextPageToken: result.pageToken,
     };
   }
 
-  async createAuthUser(data: CreateFirestoreAuthUserRequest): Promise<FirestoreAuthUser> {
+  async createAuthUser(
+    data: CreateFirestoreAuthUserRequest
+  ): Promise<FirestoreAuthUser> {
     const u = await this.authClient.createUser(data);
     return {
       uid: u.uid,
-      email: u.email ?? '',
-      displayName: u.displayName ?? '',
+      email: u.email ?? "",
+      displayName: u.displayName ?? "",
       disabled: u.disabled,
       emailVerified: u.emailVerified,
       creationTime: u.metadata.creationTime,
-      lastSignInTime: u.metadata.lastSignInTime ?? '',
+      lastSignInTime: u.metadata.lastSignInTime ?? "",
     };
   }
 
-  async updateAuthUser(uid: string, data: UpdateFirestoreAuthUserRequest): Promise<FirestoreAuthUser> {
+  async updateAuthUser(
+    uid: string,
+    data: UpdateFirestoreAuthUserRequest
+  ): Promise<FirestoreAuthUser> {
     const u = await this.authClient.updateUser(uid, data);
     return {
       uid: u.uid,
-      email: u.email ?? '',
-      displayName: u.displayName ?? '',
+      email: u.email ?? "",
+      displayName: u.displayName ?? "",
       disabled: u.disabled,
       emailVerified: u.emailVerified,
       creationTime: u.metadata.creationTime,
-      lastSignInTime: u.metadata.lastSignInTime ?? '',
+      lastSignInTime: u.metadata.lastSignInTime ?? "",
     };
   }
 
