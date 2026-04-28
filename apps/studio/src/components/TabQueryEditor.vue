@@ -539,6 +539,7 @@
   import { FormatterDialect, dialectFor } from "@shared/lib/dialects/models"
   import { findSqlQueryIdentifierDialect } from "@/lib/editor/CodeMirrorPlugins";
   import { queryMagicExtension } from "@/lib/editor/extensions/queryMagicExtension";
+import { firestoreHintExtension } from "@/lib/editor/extensions/firestoreHint";
   import { getVimKeymapsFromVimrc } from "@/lib/editor/vim";
   import { monokaiInit } from '@uiw/codemirror-theme-monokai';
   import { SmartLocalStorage } from '@/common/LocalStorage';
@@ -610,6 +611,7 @@
         individualQueries: [],
         currentlySelectedQuery: null,
         queryMagic: queryMagicExtension(),
+        firestoreHint: firestoreHintExtension(),
         isManualCommit: false,
         hasActiveTransaction: false,
         transactionTimeoutWarningListenerId: null,
@@ -890,7 +892,7 @@
       },
       replaceExtensions() {
         return (extensions) => {
-          return [
+          const exts = [
             extensions,
             monokaiInit({
               settings: {
@@ -900,6 +902,10 @@
             }),
             this.queryMagic.extensions,
           ]
+          if (this.connectionType === 'firestore') {
+            exts.push(this.firestoreHint.extensions)
+          }
+          return exts
         }
       },
     },
@@ -1146,6 +1152,14 @@
         // Setup query magic data providers
         this.queryMagic.setDefaultSchemaGetter(() => this.defaultSchema);
         this.queryMagic.setTablesGetter(() => this.tables);
+
+        // Setup Firestore hint data providers
+        if (this.connectionType === 'firestore') {
+          this.firestoreHint.setTablesGetter(() => this.tables);
+          this.firestoreHint.setColumnsGetter(async (tableName: string) => {
+            return this.columnsGetter(tableName);
+          });
+        }
 
         // this gives the dom a chance to kick in and render these
         // before we try to read their heights
