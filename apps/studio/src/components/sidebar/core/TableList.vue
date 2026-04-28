@@ -78,6 +78,17 @@
     <!-- Tables -->
     <hr v-show="pinnedEntities.length > 0"> <!-- Fake splitjs Gutter styling -->
 
+    <!-- Firestore Authentication node -->
+    <div
+      v-if="connectionType === 'firestore'"
+      class="auth-node"
+      title="Open Firebase Authentication"
+      @click="openAuthTab"
+    >
+      <i class="material-icons">manage_accounts</i>
+      <span>Authentication</span>
+    </div>
+
     <nav
       class="list-group flex-col"
       ref="tables"
@@ -361,6 +372,9 @@ import { matches } from '@/common/transport/TransportPinnedEntity'
           this.$store.commit('selectSidebarItem', null)
         }
       },
+      openAuthTab() {
+        this.$root.$emit(AppEvent.loadFirestoreAuth);
+      },
       togglePinTableList(entity: TableOrView | Routine, pinned?: boolean) {
         if (typeof pinned === 'undefined') {
           pinned = !this.pinnedEntities.includes(entity)
@@ -407,5 +421,38 @@ import { matches } from '@/common/transport/TransportPinnedEntity'
   p.no-entities {
     width: 100%;
     white-space:normal;
+  }
+  .auth-node {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+    margin: 0.25rem 0.4rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.8rem;
+    height: 1.8rem;
+    color: var(--text-dark);
+    background: rgba(0, 0, 0, 0.03);
+    border-left: 3px solid var(--theme-primary);
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--theme-primary);
+    }
+
+    .material-icons {
+      font-size: 1.1rem;
+      color: var(--theme-primary);
+    }
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 </style>

@@ -361,4 +361,10 @@ export interface IBasicDatabaseClient {
   /** Returns a query for the given filter */
   getQueryForFilter(filter: TableFilter): Promise<string>
   getFilteredDataCount(table: string, schema: string | null, filter: string ): Promise<string>
+
+  // Firestore Auth
+  listAuthUsers(pageToken?: string): Promise<{ users: FirestoreAuthUser[], nextPageToken?: string }>
+  createAuthUser(data: CreateFirestoreAuthUserRequest): Promise<FirestoreAuthUser>
+  updateAuthUser(uid: string, data: UpdateFirestoreAuthUserRequest): Promise<FirestoreAuthUser>
+  deleteAuthUser(uid: string): Promise<void>
 }

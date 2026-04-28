@@ -79,6 +79,8 @@ export enum AppEvent {
   changedTheme = 'changedTheme',
   /** A plugin menu item was clicked in the native/client menu under the tools. */
   pluginMenuClicked = 'pluginMenuClicked',
+  /** Load the Firestore Authentication Users tab */
+  loadFirestoreAuth = 'loadFirestoreAuth',
 }
 
 export interface RootBinding {

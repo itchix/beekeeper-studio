@@ -169,6 +169,11 @@
           :connection="connection"
           @close="close"
         />
+        <FirestoreAuthTab
+          v-if="tab.tabType === 'firestore-auth'"
+          :tab="tab"
+          :active="activeTab?.id === tab.id"
+        />
       </div>
     </div>
     <portal to="modals">
@@ -324,6 +329,7 @@ import ConfirmationModal from './common/modals/ConfirmationModal.vue'
 import CreateCollectionModal from './common/modals/CreateCollectionModal.vue'
 import SqlFilesImportModal from '@/components/common/modals/SqlFilesImportModal.vue'
 import Shell from './TabShell.vue'
+import FirestoreAuthTab from './FirestoreAuthTab.vue'
 
 import { safeSqlFormat as safeFormat } from '@/common/utils';
 import { TabTypeConfig, TransportOpenTab, TransportPluginTab, setFilters, matches, duplicate, TabType } from '@/common/transport/TransportOpenTab'
@@ -352,6 +358,7 @@ export default Vue.extend({
     Shell,
     PluginShell,
     PluginBase,
+    FirestoreAuthTab,
   },
   data() {
     return {
@@ -452,6 +459,7 @@ export default Vue.extend({
         { event: AppEvent.beginImport, handler: this.beginImport },
         { event: AppEvent.restoreDatabase, handler: this.restoreDatabase },
         { event: AppEvent.switchUserKeymap, handler: this.switchUserKeymap },
+        { event: AppEvent.loadFirestoreAuth, handler: this.openFirestoreAuth },
       ]
     },
     lastTab() {
@@ -1184,6 +1192,15 @@ export default Vue.extend({
       if (existing) return this.$store.dispatch('tabs/setActive', existing)
 
       this.addTab(tab);
+    },
+    openFirestoreAuth() {
+      const t = {} as TransportOpenTab;
+      t.tabType = 'firestore-auth';
+      t.title = 'Authentication';
+      t.unsavedChanges = false;
+      const existing = this.tabItems.find((tab) => matches(tab, t));
+      if (existing) return this.$store.dispatch('tabs/setActive', existing);
+      this.addTab(t);
     },
     copyName(item) {
       if (item.tabType !== 'table' && item.tabType !== "table-properties") return;

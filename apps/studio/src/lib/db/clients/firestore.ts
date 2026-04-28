@@ -37,6 +37,9 @@ import {
   FirestoreOptions,
   FirestoreAuthType,
   DatabaseElement,
+  FirestoreAuthUser,
+  CreateFirestoreAuthUserRequest,
+  UpdateFirestoreAuthUserRequest,
 } from "../types";
 import { ChangeBuilderBase } from "@shared/lib/sql/change_builder/ChangeBuilderBase";
 import { CreateTableSpec, TableKey, AlterTableSpec } from "@shared/lib/dialects/models";
@@ -56,6 +59,7 @@ const firestoreContext: AppContextProvider = NoOpContextProvider;
 export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   private app: { delete(): Promise<void> } | null = null;
   private firestoreDb: Firestore | null = null;
+  private authClient: any = null;
   private firestoreOptions: FirestoreOptions;
 
   private get firestoreClient(): Firestore {
@@ -132,6 +136,8 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     try {
       const databaseId = this.firestoreOptions?.databaseId || "(default)";
       this.firestoreDb = getFirestore(this.app, databaseId);
+      const { getAuth } = await import("firebase-admin/auth");
+      this.authClient = getAuth(this.app as any);
 
       // Test the connection by listing collections
       await this.firestoreClient.listCollections();
@@ -1445,5 +1451,51 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     _schema?: string
   ): ChangeBuilderBase {
     throw new Error("Not supported for Firestore");
+  }
+
+  async listAuthUsers(pageToken?: string): Promise<{ users: FirestoreAuthUser[], nextPageToken?: string }> {
+    const result = await this.authClient.listUsers(1000, pageToken);
+    return {
+      users: result.users.map((u: any) => ({
+        uid: u.uid,
+        email: u.email ?? '',
+        displayName: u.displayName ?? '',
+        disabled: u.disabled,
+        emailVerified: u.emailVerified,
+        creationTime: u.metadata.creationTime,
+        lastSignInTime: u.metadata.lastSignInTime ?? '',
+      })),
+      nextPageToken: result.pageToken,
+    };
+  }
+
+  async createAuthUser(data: CreateFirestoreAuthUserRequest): Promise<FirestoreAuthUser> {
+    const u = await this.authClient.createUser(data);
+    return {
+      uid: u.uid,
+      email: u.email ?? '',
+      displayName: u.displayName ?? '',
+      disabled: u.disabled,
+      emailVerified: u.emailVerified,
+      creationTime: u.metadata.creationTime,
+      lastSignInTime: u.metadata.lastSignInTime ?? '',
+    };
+  }
+
+  async updateAuthUser(uid: string, data: UpdateFirestoreAuthUserRequest): Promise<FirestoreAuthUser> {
+    const u = await this.authClient.updateUser(uid, data);
+    return {
+      uid: u.uid,
+      email: u.email ?? '',
+      displayName: u.displayName ?? '',
+      disabled: u.disabled,
+      emailVerified: u.emailVerified,
+      creationTime: u.metadata.creationTime,
+      lastSignInTime: u.metadata.lastSignInTime ?? '',
+    };
+  }
+
+  async deleteAuthUser(uid: string): Promise<void> {
+    await this.authClient.deleteUser(uid);
   }
 }

@@ -5,7 +5,7 @@ import { Knex } from 'knex';
 import _ from 'lodash'
 import { ChangeBuilderBase } from '@shared/lib/sql/change_builder/ChangeBuilderBase';
 import { identify } from 'sql-query-identifier';
-import { ConnectionType, DatabaseElement, IBasicDatabaseClient, IDbConnectionDatabase } from '../types';
+import { ConnectionType, DatabaseElement, FirestoreAuthUser, CreateFirestoreAuthUserRequest, UpdateFirestoreAuthUserRequest, IBasicDatabaseClient, IDbConnectionDatabase } from '../types';
 import rawLog from "@bksLogger";
 import connectTunnel from '../tunnel';
 import { IDbConnectionServer } from '../backendTypes';
@@ -882,5 +882,21 @@ export abstract class BasicDatabaseClient<RawResultType extends BaseQueryResult,
     });
 
     return columns;
+  }
+
+  async listAuthUsers(_pageToken?: string): Promise<{ users: FirestoreAuthUser[], nextPageToken?: string }> {
+    throw new Error("Not supported for this database type");
+  }
+
+  async createAuthUser(_data: CreateFirestoreAuthUserRequest): Promise<FirestoreAuthUser> {
+    throw new Error("Not supported for this database type");
+  }
+
+  async updateAuthUser(_uid: string, _data: UpdateFirestoreAuthUserRequest): Promise<FirestoreAuthUser> {
+    throw new Error("Not supported for this database type");
+  }
+
+  async deleteAuthUser(_uid: string): Promise<void> {
+    throw new Error("Not supported for this database type");
   }
 }
