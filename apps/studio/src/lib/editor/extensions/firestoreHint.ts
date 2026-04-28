@@ -1,20 +1,3 @@
-/**
- * A CodeMirror 6 extension that provides Firestore-specific autocomplete.
- *
- * Provides completions for:
- * - Collection names (from the tables list)
- * - Field names (from column data, including nested dot-notation paths)
- * - Firestore query methods (.where, .orderBy, .limit, .offset, .get)
- * - Firestore operators (==, !=, <, <=, >, >=, in, not-in, array-contains, array-contains-any)
- *
- * Usage:
- * 1. Create instance: const firestoreHint = firestoreHintExtension()
- * 2. Add to extensions: firestoreHint.extensions
- * 3. Set data providers after editor init:
- *    firestoreHint.setTablesGetter(() => tables)
- *    firestoreHint.setColumnsGetter(async (tableName) => columns)
- */
-
 import {
   CompletionContext,
   CompletionResult,
@@ -28,11 +11,9 @@ import { EditorView, ViewPlugin } from "@codemirror/view";
 import { TableOrView } from "@/lib/db/models";
 import rawLog from "@bksLogger";
 
-const log = rawLog.scope("FirestoreHint");
+const log = rawLog.scope("firestorehint");
 
-// ── Module-level constants ────────────────────────────────────────────────────
-
-// Regexes pre-compiled once instead of on every keystroke
+// Pre-compiled regexes
 // Support hyphens in identifiers (Firestore allows them in collection/field names)
 const RE_COLLECTION_ARG  = /collection\(\s*['"]?([\w-]*)$/;
 const RE_WHERE_FIELD     = /\.where\(\s*['"]?([\w.-]*)$/;
@@ -46,8 +27,6 @@ const DIRECTION_OPTIONS = [
   { label: "asc",  type: "keyword", info: "Ascending order"  },
   { label: "desc", type: "keyword", info: "Descending order" },
 ];
-
-// ── State effects & fields ────────────────────────────────────────────────────
 
 const setTablesEffect = StateEffect.define<() => TableOrView[]>();
 const setColumnsGetterEffect = StateEffect.define<(tableName: string) => Promise<string[] | null>>();
@@ -71,8 +50,6 @@ const columnsGetterField = StateField.define<((tableName: string) => Promise<str
     return value;
   },
 });
-
-// ── Static completion options ─────────────────────────────────────────────────
 
 const FIRESTORE_METHODS = [
   { label: "where(",      type: "function", detail: "field, op, value",  info: "Add a filter constraint"      },
@@ -106,13 +83,6 @@ const FIRESTORE_TOP_LEVEL = [
   { label: "doc(",        type: "function", detail: "path", info: "Reference a document"   },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Extract the LAST collection name from text, so chained queries
- * like db.collection("users").where(...).db.collection("orders")
- * resolve to "orders" (the one closest to the cursor).
- */
 function extractCollectionName(text: string): string | null {
   const matches = [...text.matchAll(RE_COLLECTION_NAME)];
   if (matches.length === 0) return null;
@@ -125,15 +95,9 @@ function filterByPrefix<T extends { label: string }>(items: T[], prefix: string)
     : items;
 }
 
-/**
- * Get the full text from the start of the document to the cursor position.
- * This allows multi-line query matching (e.g. chained .where().orderBy()).
- */
 function textBeforeCursor(context: CompletionContext): string {
   return context.state.doc.sliceString(0, context.pos);
 }
-
-// ── Completion source ─────────────────────────────────────────────────────────
 
 async function completionSource(
   context: CompletionContext
@@ -247,8 +211,6 @@ async function completionSource(
 
   return null;
 }
-
-// ── Public factory ────────────────────────────────────────────────────────────
 
 export function firestoreHintExtension() {
   let view: EditorView | null = null;

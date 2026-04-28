@@ -1395,17 +1395,19 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
   }
 
-  private inferBksFields(rows: any[]): BksField[] {
-    if (rows.length === 0) return [];
-
+  private collectFieldNames(rows: any[]): string[] {
     const fieldSet = new Set<string>();
     for (const row of rows) {
       for (const key of Object.keys(row)) {
         fieldSet.add(key);
       }
     }
+    return Array.from(fieldSet);
+  }
 
-    return Array.from(fieldSet).map((name) => ({
+  private inferBksFields(rows: any[]): BksField[] {
+    if (rows.length === 0) return [];
+    return this.collectFieldNames(rows).map((name) => ({
       name,
       bksType: "UNKNOWN" as const,
     }));
@@ -1413,15 +1415,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
   private inferFieldDescriptors(rows: any[]): FieldDescriptor[] {
     if (rows.length === 0) return [];
-
-    const fieldSet = new Set<string>();
-    for (const row of rows) {
-      for (const key of Object.keys(row)) {
-        fieldSet.add(key);
-      }
-    }
-
-    return Array.from(fieldSet).map((name) => ({
+    return this.collectFieldNames(rows).map((name) => ({
       name,
       id: name,
       dataType: name === "__name__" ? "string" : "any",
