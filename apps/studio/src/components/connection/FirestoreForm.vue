@@ -33,7 +33,7 @@
         id="serviceAccountJson"
         class="form-control"
         v-model="serviceAccountJson"
-        @input="onJsonInput"
+        @blur="onJsonBlur"
         placeholder='Paste your service account JSON key here...'
         rows="6"
         style="font-family: monospace; font-size: 12px;"
@@ -57,7 +57,7 @@
         type="text"
         class="form-control"
         v-model="serviceAccountPath"
-        @input="onPathInput"
+        @blur="onPathBlur"
         placeholder="/path/to/service-account-key.json"
       />
       <small class="form-text text-muted">
@@ -155,8 +155,9 @@ export default {
     }
   },
   methods: {
-    // Mutual exclusivity: filling JSON clears the file path
-    onJsonInput() {
+    // Mutual exclusivity: clearing the opposing field only on blur
+    // to avoid wiping user data on the first keystroke
+    onJsonBlur() {
       if (this.serviceAccountJson?.trim()) {
         this.$set(this.config, 'firestoreOptions', {
           ...this.config.firestoreOptions,
@@ -164,8 +165,7 @@ export default {
         })
       }
     },
-    // Mutual exclusivity: filling file path clears the JSON
-    onPathInput() {
+    onPathBlur() {
       if (this.serviceAccountPath?.trim()) {
         this.$set(this.config, 'firestoreOptions', {
           ...this.config.firestoreOptions,
