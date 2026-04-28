@@ -10,4 +10,21 @@ declare module 'firebase-admin/app' {
 
 declare module 'firebase-admin/firestore' {
   export function getFirestore(app?: any, databaseId?: string): any;
+
+  export class Timestamp {
+    readonly seconds: number;
+    readonly nanoseconds: number;
+    static fromDate(date: Date): Timestamp;
+    static fromMillis(milliseconds: number): Timestamp;
+    toDate(): Date;
+    toMillis(): number;
+    isEqual(other: Timestamp): boolean;
+  }
+
+  export class GeoPoint {
+    readonly latitude: number;
+    readonly longitude: number;
+    constructor(latitude: number, longitude: number);
+    isEqual(other: GeoPoint): boolean;
+  }
 }

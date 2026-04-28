@@ -75,6 +75,10 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   private app: any = null;
   private firestoreDb: any = null;
   private firestoreOptions: FirestoreOptions;
+  /** Tracks which columns (in "table.column" format) are Firestore types that need conversion on save */
+  private timestampColumns: Set<string> = new Set();
+  private geopointColumns: Set<string> = new Set();
+  private referenceColumns: Set<string> = new Set();
 
   constructor(server: IDbConnectionServer, database: IDbConnectionDatabase) {
     super(null, firestoreContext, server, database);
@@ -104,34 +108,32 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         // Service account authentication
         let serviceAccount: any;
 
-        if (this.firestoreOptions?.serviceAccountJson) {
+        const jsonStr = this.firestoreOptions?.serviceAccountJson?.trim();
+        const filePath = this.firestoreOptions?.serviceAccountPath?.trim();
+
+        if (jsonStr) {
           // Parse JSON directly from the config
           try {
-            serviceAccount = JSON.parse(
-              this.firestoreOptions.serviceAccountJson
-            );
+            serviceAccount = JSON.parse(jsonStr);
           } catch (_e) {
             throw new Error(
               "Invalid service account JSON. Please provide a valid JSON string."
             );
           }
-        } else if (this.firestoreOptions?.serviceAccountPath) {
+        } else if (filePath) {
           // Read from file path
           const fs = await import("fs/promises");
           try {
-            const content = await fs.readFile(
-              this.firestoreOptions.serviceAccountPath,
-              "utf-8"
-            );
+            const content = await fs.readFile(filePath, "utf-8");
             serviceAccount = JSON.parse(content);
           } catch (_e) {
             throw new Error(
-              `Could not read service account file: ${this.firestoreOptions.serviceAccountPath}`
+              `Could not read service account file: ${filePath}`
             );
           }
         } else {
           throw new Error(
-            "Firestore (test/connect): when using Service Account authentication, provide serviceAccountJson or serviceAccountPath, or switch to Application Default Credentials."
+            "Please provide a Service Account JSON key or file path in the connection settings, or switch to Application Default Credentials."
           );
         }
 
@@ -252,15 +254,28 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     let ordinalPosition = 1;
     for (const [fieldName, types] of fieldMap) {
       const typeArr = Array.from(types);
+      const primaryType = typeArr.length === 1 ? typeArr[0] : typeArr.join(" | ");
       columns.push({
         ordinalPosition: ordinalPosition++,
         columnName: fieldName,
-        dataType: typeArr.length === 1 ? typeArr[0] : typeArr.join(" | "),
+        dataType: primaryType,
         tableName: table,
         schemaName: schema || null,
         nullable: true,
         bksField: { name: fieldName, bksType: "UNKNOWN" },
       });
+
+      // Track Firestore special types for round-trip conversion
+      const columnKey = `${table}.${fieldName}`;
+      if (types.has("timestamp")) {
+        this.timestampColumns.add(columnKey);
+      }
+      if (types.has("geopoint")) {
+        this.geopointColumns.add(columnKey);
+      }
+      if (types.has("reference")) {
+        this.referenceColumns.add(columnKey);
+      }
     }
 
     // Always include document ID
@@ -496,16 +511,28 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   ): Promise<TableUpdateResult[]> {
     const results: TableUpdateResult[] = [];
 
+// Get Firestore Timestamp and GeoPoint classes for value conversion
+    let TimestampClass: any = null;
+    let GeoPointClass: any = null;
+    try {
+      const firestoreModule = await import("firebase-admin/firestore");
+      TimestampClass = firestoreModule.Timestamp;
+      GeoPointClass = firestoreModule.GeoPoint;
+    } catch {
+      // Fall back to Date objects if import fails
+    }
+
     // Handle inserts
     if (changes.inserts?.length) {
       for (const insert of changes.inserts) {
         for (const row of insert.data) {
           const { __name__, ...data } = row;
+          const convertedData = await this._unflattenForFirestore(data);
           const docRef = __name__
             ? this.firestoreDb.collection(insert.table).doc(__name__)
             : this.firestoreDb.collection(insert.table).doc();
 
-          await docRef.set(this._unflattenForFirestore(data));
+          await docRef.set(convertedData);
           results.push({
             primaryKeys: [{ column: "__name__", value: docRef.id }],
             result: { __name__: docRef.id, ...data },
@@ -522,11 +549,31 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         )?.value;
         if (!docId) continue;
 
+        // Determine the column type for proper conversion
+        const columnKey = `${update.table}.${update.column}`;
+        const isTimestamp = this.timestampColumns.has(columnKey) ||
+          update.columnType === "timestamp" ||
+          update.columnObject?.dataType === "timestamp";
+        const isGeopoint = this.geopointColumns.has(columnKey) ||
+          update.columnType === "geopoint" ||
+          update.columnObject?.dataType === "geopoint";
+        const isReference = this.referenceColumns.has(columnKey) ||
+          update.columnType === "reference" ||
+          update.columnObject?.dataType === "reference";
+
+        const convertedValue = this._convertValueForSave(
+          update.value,
+          isTimestamp,
+          isGeopoint,
+          isReference,
+          TimestampClass,
+          GeoPointClass
+        );
         await this.firestoreDb
           .collection(update.table)
           .doc(docId)
           .update({
-            [update.column]: update.value,
+            [update.column]: convertedValue,
           });
         results.push({
           primaryKeys: [{ column: "__name__", value: docId }],
@@ -1056,7 +1103,9 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
   /**
    * Flatten nested Firestore data for table display.
-   * Converts maps to dot-notation keys and arrays to JSON strings.
+   * Converts Timestamps to human-readable ISO strings,
+   * GeoPoints to "lat,lng" format, maps to dot-notation keys,
+   * and arrays to JSON strings.
    */
   private _flattenForTable(
     data: any,
@@ -1070,14 +1119,22 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       if (value === null || value === undefined) {
         result[fullKey] = null;
       } else if (value instanceof Date) {
-        result[fullKey] = value.toISOString();
+        // Native JS Date — format as readable string
+        result[fullKey] = this._formatDate(value);
+      } else if (this._isFirestoreTimestamp(value)) {
+        // Firestore Timestamp — convert to readable string
+        result[fullKey] = this._formatDate((value as any).toDate());
+      } else if (this._isFirestoreGeoPoint(value)) {
+        // Firestore GeoPoint — format as "lat, lng"
+        result[fullKey] = `${(value as any).latitude}, ${(value as any).longitude}`;
+      } else if (this._isFirestoreDocumentReference(value)) {
+        // Firestore DocumentReference — show the path
+        result[fullKey] = (value as any).path;
       } else if (
         typeof value === "object" &&
-        !Array.isArray(value) &&
-        !this._isFirestoreGeoPoint(value) &&
-        !this._isFirestoreTimestamp(value)
+        !Array.isArray(value)
       ) {
-        // Nested map - flatten recursively
+        // Nested map — flatten recursively
         Object.assign(result, this._flattenForTable(value, fullKey));
       } else if (Array.isArray(value)) {
         result[fullKey] = JSON.stringify(value);
@@ -1090,12 +1147,53 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   /**
-   * Unflatten dot-notation keys back to nested objects for Firestore writes.
+   * Format a Date object as a human-readable string.
+   * e.g. "2024-01-15 14:30:00" instead of raw ISO format
    */
-  private _unflattenForFirestore(
+  private _formatDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    const ms = String(date.getMilliseconds()).padStart(3, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${ms}`;
+  }
+
+  /**
+   * Check if a value is a Firestore DocumentReference.
+   */
+  private _isFirestoreDocumentReference(value: any): boolean {
+    return (
+      value &&
+      typeof value === "object" &&
+      typeof value.path === "string" &&
+      typeof value.id === "string" &&
+      typeof value.parent === "object"
+    );
+  }
+
+  /**
+   * Unflatten dot-notation keys back to nested objects for Firestore writes.
+   * For inserts (no column type info), uses heuristic detection.
+   * For updates, prefer _convertValueForSave which uses known column types.
+   */
+  private async _unflattenForFirestore(
     data: Record<string, any>
-  ): Record<string, any> {
+  ): Promise<Record<string, any>> {
     const result: Record<string, any> = {};
+
+    // Get Firestore Timestamp and GeoPoint classes for value conversion
+    let TimestampClass: any = null;
+    let GeoPointClass: any = null;
+    try {
+      const firestoreModule = await import("firebase-admin/firestore");
+      TimestampClass = firestoreModule.Timestamp;
+      GeoPointClass = firestoreModule.GeoPoint;
+    } catch {
+      // Fall back to Date objects if import fails
+    }
 
     for (const [key, value] of Object.entries(data)) {
       if (key === "__name__") continue;
@@ -1110,23 +1208,196 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         current = current[parts[i]];
       }
 
-      // Try to parse JSON strings back to objects/arrays
-      if (typeof value === "string") {
-        try {
-          const parsed = JSON.parse(value);
-          if (typeof parsed === "object" && parsed !== null) {
-            current[parts[parts.length - 1]] = parsed;
-            continue;
-          }
-        } catch {
-          // Not JSON, keep as string
-        }
-      }
-
-      current[parts[parts.length - 1]] = value;
+      const lastPart = parts[parts.length - 1];
+      const convertedValue = this._convertValueForInsert(value, TimestampClass, GeoPointClass);
+      current[lastPart] = convertedValue;
     }
 
     return result;
+  }
+
+  /**
+   * Convert a value for insert operations where we don't have column type info.
+   * Uses heuristic detection: only converts strings that match our known formats.
+   */
+  private _convertValueForInsert(
+    value: any,
+    TimestampClass: any,
+    GeoPointClass: any
+  ): any {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === "string") {
+      // Only convert strings that match our _formatDate output pattern
+      // Format: "YYYY-MM-DD HH:mm:ss.SSS" (what _formatDate produces)
+      const dateValue = this._parseDateString(value);
+      if (dateValue) {
+        if (TimestampClass) {
+          return TimestampClass.fromDate(dateValue);
+        }
+        // Firestore SDK auto-converts Date to Timestamp
+        return dateValue;
+      }
+
+      // GeoPoint format: "lat, lng"
+      const geoMatch = value.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+      if (geoMatch && GeoPointClass) {
+        return new GeoPointClass(
+          parseFloat(geoMatch[1]),
+          parseFloat(geoMatch[2])
+        );
+      }
+
+      // Try JSON parse for objects/arrays
+      try {
+        const parsed = JSON.parse(value);
+        if (typeof parsed === "object" && parsed !== null) {
+          return this._convertObjectForSave(parsed, TimestampClass, GeoPointClass);
+        }
+      } catch {
+        // Not JSON, keep as string
+      }
+
+      return value;
+    }
+
+    return value;
+  }
+
+  /**
+   * Convert a value for saving to Firestore, using known column type info.
+   * This is the reliable round-trip: we know the column type from schema inference,
+   * so we can convert back with certainty instead of guessing from string patterns.
+   */
+  private _convertValueForSave(
+    value: any,
+    isTimestamp: boolean,
+    isGeopoint: boolean,
+    isReference: boolean,
+    TimestampClass: any,
+    GeoPointClass: any
+  ): any {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    // Timestamp columns: parse date string → Firestore Timestamp
+    if (isTimestamp && typeof value === "string") {
+      const dateValue = this._parseDateString(value);
+      if (dateValue) {
+        if (TimestampClass) {
+          return TimestampClass.fromDate(dateValue);
+        }
+        // Fallback: Firestore SDK auto-converts Date to Timestamp
+        return dateValue;
+      }
+    }
+
+    // GeoPoint columns: parse "lat, lng" string → Firestore GeoPoint
+    if (isGeopoint && typeof value === "string") {
+      const geoMatch = value.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+      if (geoMatch && GeoPointClass) {
+        return new GeoPointClass(
+          parseFloat(geoMatch[1]),
+          parseFloat(geoMatch[2])
+        );
+      }
+    }
+
+    // Reference columns: string path → Firestore DocumentReference
+    if (isReference && typeof value === "string") {
+      // DocumentReference paths look like "collection/document"
+      const parts = value.split("/");
+      if (parts.length >= 2 && parts.length % 2 === 0) {
+        try {
+          return this.firestoreDb.doc(value);
+        } catch {
+          // If doc() fails, keep as string
+        }
+      }
+    }
+
+    // For all other values, try JSON parse for objects/arrays
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (typeof parsed === "object" && parsed !== null) {
+          return this._convertObjectForSave(
+            parsed,
+            TimestampClass,
+            GeoPointClass
+          );
+        }
+      } catch {
+        // Not JSON, keep as string
+      }
+    }
+
+    return value;
+  }
+
+  /**
+   * Recursively convert values in a parsed object for Firestore writes.
+   * Detects date strings in object values that match our format.
+   */
+  private _convertObjectForSave(
+    obj: any,
+    TimestampClass: any,
+    GeoPointClass: any
+  ): any {
+    if (Array.isArray(obj)) {
+      return obj.map((v) =>
+        this._convertValueForSave(v, false, false, false, TimestampClass, GeoPointClass)
+      );
+    }
+
+    if (obj !== null && typeof obj === "object") {
+      const result: Record<string, any> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        result[k] = this._convertValueForSave(v, false, false, false, TimestampClass, GeoPointClass);
+      }
+      return result;
+    }
+
+    return obj;
+  }
+
+  /**
+   * Parse a date string in either "YYYY-MM-DD HH:mm:ss.SSS" or ISO format.
+   * Returns a Date object if the string looks like a date, null otherwise.
+   */
+  private _parseDateString(value: string): Date | null {
+    // Match "YYYY-MM-DD HH:mm:ss" or "YYYY-MM-DD HH:mm:ss.SSS"
+    const datetimeMatch = value.match(
+      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/
+    );
+    if (datetimeMatch) {
+      const [, y, mo, d, h, mi, s, ms] = datetimeMatch;
+      return new Date(
+        parseInt(y),
+        parseInt(mo) - 1,
+        parseInt(d),
+        parseInt(h),
+        parseInt(mi),
+        parseInt(s),
+        ms ? parseInt(ms.padEnd(3, "0")) : 0
+      );
+    }
+
+    // Match ISO format "YYYY-MM-DDTHH:mm:ss.sssZ" or similar
+    const isoMatch = value.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/
+    );
+    if (isoMatch) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -1143,19 +1414,25 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       if (value === null || value === undefined) {
         if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
         fieldMap.get(fullKey)!.add("null");
+      } else if (this._isFirestoreTimestamp(value)) {
+        if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
+        fieldMap.get(fullKey)!.add("timestamp");
+      } else if (this._isFirestoreGeoPoint(value)) {
+        if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
+        fieldMap.get(fullKey)!.add("geopoint");
+      } else if (this._isFirestoreDocumentReference(value)) {
+        if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
+        fieldMap.get(fullKey)!.add("reference");
+      } else if (value instanceof Date) {
+        if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
+        fieldMap.get(fullKey)!.add("timestamp");
       } else if (Array.isArray(value)) {
         if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
         fieldMap.get(fullKey)!.add("array");
         // Also flatten array elements if they're objects
-        if (value.length > 0 && typeof value[0] === "object") {
+        if (value.length > 0 && typeof value[0] === "object" && value[0] !== null) {
           this._flattenFields(value[0], fieldMap, `${fullKey}[]`);
         }
-      } else if (
-        value instanceof Date ||
-        ((value as any)?.toDate && typeof (value as any).toDate === "function")
-      ) {
-        if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
-        fieldMap.get(fullKey)!.add("timestamp");
       } else if (typeof value === "object" && value !== null) {
         if (!fieldMap.has(fullKey)) fieldMap.set(fullKey, new Set());
         fieldMap.get(fullKey)!.add("map");
