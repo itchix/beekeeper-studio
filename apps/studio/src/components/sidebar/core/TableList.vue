@@ -373,6 +373,7 @@ import { matches } from '@/common/transport/TransportPinnedEntity'
         }
       },
       openAuthTab() {
+        // TODO: migrate to Vuex action instead of $root.$emit
         this.$root.$emit(AppEvent.loadFirestoreAuth);
       },
       togglePinTableList(entity: TableOrView | Routine, pinned?: boolean) {

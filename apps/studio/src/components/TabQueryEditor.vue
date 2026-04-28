@@ -1156,9 +1156,7 @@ import { firestoreHintExtension } from "@/lib/editor/extensions/firestoreHint";
         // Setup Firestore hint data providers
         if (this.connectionType === 'firestore') {
           this.firestoreHint.setTablesGetter(() => this.tables);
-          this.firestoreHint.setColumnsGetter(async (tableName: string) => {
-            return this.columnsGetter(tableName);
-          });
+          this.firestoreHint.setColumnsGetter(this.columnsGetter.bind(this));
         }
 
         // this gives the dom a chance to kick in and render these

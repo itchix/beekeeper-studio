@@ -13,6 +13,8 @@ import rawLog from "@bksLogger";
 
 const log = rawLog.scope("firestorehint");
 
+let completionRequestCounter = 0;
+
 // Pre-compiled regexes
 // Support hyphens in identifiers (Firestore allows them in collection/field names)
 const RE_COLLECTION_ARG  = /collection\(\s*['"]?([\w-]*)$/;
@@ -102,6 +104,7 @@ function textBeforeCursor(context: CompletionContext): string {
 async function completionSource(
   context: CompletionContext
 ): Promise<CompletionResult | null> {
+  const requestId = ++completionRequestCounter;
   const tablesGetter = context.state.field(tablesGetterField);
   const columnsGetter = context.state.field(columnsGetterField);
 
@@ -139,6 +142,7 @@ async function completionSource(
     if (collectionName && columnsGetter) {
       try {
         const columns = await columnsGetter(collectionName);
+        if (requestId !== completionRequestCounter) return null;
         if (columns && columns.length > 0) {
           return {
             from: pos - prefix.length,
@@ -172,6 +176,7 @@ async function completionSource(
     if (collectionName && columnsGetter) {
       try {
         const columns = await columnsGetter(collectionName);
+        if (requestId !== completionRequestCounter) return null;
         if (columns && columns.length > 0) {
           return {
             from: pos - prefix.length,

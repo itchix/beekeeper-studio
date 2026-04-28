@@ -61,10 +61,12 @@ type FirestoreQueryResult = BaseQueryResult & {
 const firestoreContext: AppContextProvider = NoOpContextProvider;
 
 export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
-  private app: { delete(): Promise<void> } | null = null;
+  private app: any = null;
   private firestoreDb: Firestore | null = null;
   private authClient: any = null;
   private firestoreOptions: FirestoreOptions;
+  private _deleteAppFn: ((app: any) => Promise<void>) | null = null;
+  private cachedFirebaseClasses: { TimestampClass: any; GeoPointClass: any } | null = null;
 
   private get firestoreClient(): Firestore {
     if (!this.firestoreDb) throw new Error("Not connected to Firestore");
@@ -89,6 +91,8 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       "firebase-admin/app"
     );
     const { getFirestore } = await import("firebase-admin/firestore");
+    const { getAuth } = await import("firebase-admin/auth");
+    this._deleteAppFn = deleteApp;
 
     const authType =
       this.firestoreOptions?.authType || FirestoreAuthType.ServiceAccount;
@@ -142,10 +146,15 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
 
     try {
+      this.authClient = getAuth(this.app as any);
+    } catch (authErr) {
+      log.warn("Firebase Auth initialization failed:", authErr);
+      this.authClient = null;
+    }
+
+    try {
       const databaseId = this.firestoreOptions?.databaseId || "(default)";
       this.firestoreDb = getFirestore(this.app, databaseId);
-      const { getAuth } = await import("firebase-admin/auth");
-      this.authClient = getAuth(this.app as any);
 
       // Test the connection by listing collections
       await this.firestoreClient.listCollections();
@@ -168,14 +177,14 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   async disconnect(): Promise<void> {
     try {
       if (this.app) {
-        const { deleteApp } = await import("firebase-admin/app");
-        await deleteApp(this.app);
+        await this._deleteAppFn?.(this.app);
       }
     } catch (error) {
       log.warn("Error disconnecting from Firestore:", error);
     }
     this.app = null;
     this.firestoreDb = null;
+    this.authClient = null;
     this.database.connected = false;
     await super.disconnect();
   }
@@ -538,6 +547,8 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     const { TimestampClass, GeoPointClass } = await this.getFirebaseClasses();
 
     if (changes.inserts?.length) {
+      let batch = this.firestoreClient.batch();
+      let batchSize = 0;
       for (const insert of changes.inserts) {
         for (const row of insert.data) {
           const { __name__, ...data } = row;
@@ -545,17 +556,25 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
           const docRef = __name__
             ? this.firestoreClient.collection(insert.table).doc(__name__)
             : this.firestoreClient.collection(insert.table).doc();
-
-          await docRef.set(convertedData);
+          batch.set(docRef, convertedData);
+          batchSize++;
           results.push({
             primaryKeys: [{ column: "__name__", value: docRef.id }],
             result: { __name__: docRef.id, ...data },
           });
+          if (batchSize >= 500) {
+            await batch.commit();
+            batch = this.firestoreClient.batch();
+            batchSize = 0;
+          }
         }
       }
+      if (batchSize > 0) await batch.commit();
     }
 
     if (changes.updates?.length) {
+      let batch = this.firestoreClient.batch();
+      let batchSize = 0;
       for (const update of changes.updates) {
         const docId = update.primaryKeys.find(
           (pk) => pk.column === "__name__"
@@ -584,31 +603,45 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
           TimestampClass,
           GeoPointClass
         );
-        await this.firestoreClient
-          .collection(update.table)
-          .doc(docId)
-          .update({
-            [update.column]: convertedValue,
-          });
+        batch.update(
+          this.firestoreClient.collection(update.table).doc(docId),
+          { [update.column]: convertedValue }
+        );
+        batchSize++;
         results.push({
           primaryKeys: [{ column: "__name__", value: docId }],
           result: { __name__: docId, [update.column]: update.value },
         });
+        if (batchSize >= 500) {
+          await batch.commit();
+          batch = this.firestoreClient.batch();
+          batchSize = 0;
+        }
       }
+      if (batchSize > 0) await batch.commit();
     }
 
     if (changes.deletes?.length) {
+      let batch = this.firestoreClient.batch();
+      let batchSize = 0;
       for (const del of changes.deletes) {
         const docId = del.primaryKeys.find(
           (pk) => pk.column === "__name__"
         )?.value;
         if (!docId) continue;
-        await this.firestoreClient.collection(del.table).doc(docId).delete();
+        batch.delete(this.firestoreClient.collection(del.table).doc(docId));
+        batchSize++;
         results.push({
           primaryKeys: [{ column: "__name__", value: docId }],
           result: { __name__: docId },
         });
+        if (batchSize >= 500) {
+          await batch.commit();
+          batch = this.firestoreClient.batch();
+          batchSize = 0;
+        }
       }
+      if (batchSize > 0) await batch.commit();
     }
 
     return results;
@@ -671,6 +704,13 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   ): Promise<void> {
     if (typeOfElement === DatabaseElement.TABLE) {
       await this.deleteCollection(elementName);
+      await this.firestoreClient
+        .collection(elementName)
+        .doc("__placeholder__")
+        .set({
+          __created__: true,
+          __createdAt__: new Date(),
+        });
     }
   }
 
@@ -916,12 +956,16 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     TimestampClass: any;
     GeoPointClass: any;
   }> {
+    if (this.cachedFirebaseClasses) {
+      return this.cachedFirebaseClasses;
+    }
     try {
       const firestoreModule = await import("firebase-admin/firestore");
-      return {
+      this.cachedFirebaseClasses = {
         TimestampClass: firestoreModule.Timestamp,
         GeoPointClass: firestoreModule.GeoPoint,
       };
+      return this.cachedFirebaseClasses;
     } catch {
       return { TimestampClass: null, GeoPointClass: null };
     }
@@ -944,6 +988,15 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         batch.delete(doc.ref);
       });
       await batch.commit();
+    }
+
+    // Recursively delete subcollections
+    const docs = await collectionRef.listDocuments();
+    for (const doc of docs) {
+      const subcollections = await doc.listCollections();
+      for (const sub of subcollections) {
+        await this.deleteCollection(`${collectionPath}/${doc.id}/${sub.id}`);
+      }
     }
   }
 
@@ -1031,6 +1084,13 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     if (offsetMatch) {
       const offsetVal = parseInt(offsetMatch[1], 10);
       if (!isNaN(offsetVal) && offsetVal > 0) query = query.offset(offsetVal);
+    }
+
+    const selectMatch = queryText.match(/\.select\(\s*\[([^\]]+)\]\s*\)/);
+    if (selectMatch) {
+      const fieldsStr = selectMatch[1];
+      const fieldNames = fieldsStr.split(',').map((f: string) => f.trim().replace(/['"]/g, ''));
+      query = query.select(...fieldNames);
     }
 
     const snapshot = await query.get();
@@ -1410,10 +1470,17 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/
     );
     if (isoMatch) {
-      const date = new Date(value);
-      if (!isNaN(date.getTime())) {
-        return date;
-      }
+      const [, y, mo, d, h, mi, s, ms] = isoMatch;
+      const date = new Date(
+        parseInt(y),
+        parseInt(mo) - 1,
+        parseInt(d),
+        parseInt(h),
+        parseInt(mi),
+        parseInt(s),
+        ms ? parseInt(ms.padEnd(3, '0')) : 0
+      );
+      if (!isNaN(date.getTime())) return date;
     }
 
     return null;

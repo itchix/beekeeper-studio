@@ -130,6 +130,7 @@ export default Vue.extend({
       saving: false,
       deleting: false,
       error: '',
+      _isDestroyed: false,
     }
   },
   computed: {
@@ -139,13 +140,17 @@ export default Vue.extend({
     },
     canSave(): boolean {
       const hasEmail = this.form.email.trim().length > 0
-      if (this.isEditing) return hasEmail
+      if (this.isEditing) {
+        const passwordProvided = this.form.password.trim().length > 0
+        return hasEmail && (!passwordProvided || this.form.password.length >= 6)
+      }
       return hasEmail && this.form.password.length >= 6
     },
   },
   methods: {
     async save() {
       this.error = ''
+      if (this._isDestroyed) return
       this.saving = true
       try {
         if (this.isEditing) {
@@ -176,6 +181,7 @@ export default Vue.extend({
         'Delete user?',
         `Are you sure you want to delete ${this.user?.email || this.user?.uid}? This action cannot be undone.`
       )
+      if (this._isDestroyed) return
       if (!confirmed) return
 
       this.deleting = true
@@ -198,6 +204,9 @@ export default Vue.extend({
         this.$noty.error('Failed to copy UID')
       }
     },
+  },
+  beforeDestroy() {
+    this._isDestroyed = true
   },
   mounted() {
     if (this.user) {

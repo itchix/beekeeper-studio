@@ -51,7 +51,7 @@ export const FirestoreData: DialectData = {
     collations: true,
     importFromFile: true,
     headerSort: false,
-    duplicateTable: true,
+    duplicateTable: false,
     export: {
       sql: true,
     },

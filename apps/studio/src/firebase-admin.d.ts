@@ -29,3 +29,7 @@ declare module "firebase-admin/firestore" {
     isEqual(other: GeoPoint): boolean;
   }
 }
+
+declare module "firebase-admin/auth" {
+  export function getAuth(app: any): any;
+}
