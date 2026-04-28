@@ -62,7 +62,7 @@ export const FirestoreData: DialectData = {
     dropSchema: true,
     collations: true,
     importFromFile: true,
-    headerSort: true,
+    headerSort: false,
     duplicateTable: true,
     export: {
       sql: true,
@@ -72,7 +72,7 @@ export const FirestoreData: DialectData = {
     transactions: true,
     chunkSizeStream: true,
     binaryColumn: true,
-    initialSort: true,
+    initialSort: false,
     sqlCreate: true,
     compositeKeys: true,
     schemaValidation: true,

@@ -414,9 +414,17 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
 
     // Apply ordering
-    for (const order of orderBy) {
-      const dir = order.dir === "DESC" ? "desc" : "asc";
-      query = query.orderBy(order.field, dir);
+    // Firestore requires orderBy for descending sorts and for offset/limit with filters.
+    // If no orderBy is specified, default to ascending by document ID.
+    if (orderBy && orderBy.length > 0) {
+      for (const order of orderBy) {
+        // Tabulator sends dir as lowercase ("asc"/"desc"), normalize to Firestore format
+        const dir = (order.dir || "ASC").toUpperCase() === "DESC" ? "desc" : "asc";
+        query = query.orderBy(order.field, dir);
+      }
+    } else {
+      // Default sort: ascending by document ID
+      query = query.orderBy("__name__", "asc");
     }
 
     // Apply offset and limit
