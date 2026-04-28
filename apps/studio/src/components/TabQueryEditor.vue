@@ -681,7 +681,8 @@
           'mariadb': 'mysql',
           'tidb': 'mysql',
           'redshift': 'psql',
-          'mongodb': 'psql'
+          'mongodb': 'psql',
+          'firestore': 'generic'
         }
         return mappings[this.connectionType] || 'generic'
       },
@@ -881,6 +882,9 @@
         // Map textEditorMode to CodeMirror 6 languageId
         if (this.dialectData.textEditorMode === 'text/x-redis') {
           return 'redis';
+        }
+        if (this.dialectData.textEditorMode === 'text/x-javascript') {
+          return 'javascript';
         }
         return this.dialectData.textEditorMode;
       },

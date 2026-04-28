@@ -170,8 +170,8 @@ export default {
     },
   },
   mounted() {
-    // Initialize firestoreOptions if not present
-    if (!this.config.firestoreOptions) {
+    // Initialize firestoreOptions if not present or empty
+    if (!this.config.firestoreOptions || !this.config.firestoreOptions.authType) {
       this.$set(this.config, 'firestoreOptions', {
         authType: FirestoreAuthType.ServiceAccount,
         serviceAccountJson: '',
