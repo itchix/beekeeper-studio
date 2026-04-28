@@ -43,6 +43,7 @@ import {
 import { ChangeBuilderBase } from "@shared/lib/sql/change_builder/ChangeBuilderBase";
 import { CreateTableSpec, TableKey } from "@shared/lib/dialects/models";
 import rawLog from "@bksLogger";
+import type { Firestore } from "@google-cloud/firestore";
 
 const log = rawLog.scope("firestore");
 
@@ -54,10 +55,10 @@ type FirestoreQueryResult = BaseQueryResult & {
 
 const firestoreContext: AppContextProvider = {
   getExecutionContext() {
-    return null;
+    return undefined as any;
   },
   async logQuery() {
-    return null;
+    return undefined as any;
   },
 };
 
@@ -72,9 +73,14 @@ const firestoreContext: AppContextProvider = {
  * - Subcollections → Nested tables (shown as parentCollection/childCollection)
  */
 export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
-  private app: any = null;
-  private firestoreDb: any = null;
+  private app: { delete(): Promise<void> } | null = null;
+  private firestoreDb: Firestore | null = null;
   private firestoreOptions: FirestoreOptions;
+
+  private get _db(): Firestore {
+    if (!this.firestoreDb) throw new Error("Not connected to Firestore");
+    return this.firestoreDb;
+  }
   /** Tracks which columns (in "table.column" format) are Firestore types that need conversion on save */
   private timestampColumns: Set<string> = new Set();
   private geopointColumns: Set<string> = new Set();
@@ -148,12 +154,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       this.firestoreDb = getFirestore(this.app, databaseId);
 
       // Test the connection by listing collections
-      await this.firestoreDb.listCollections();
+      await this._db.listCollections();
 
       this.database.connected = true;
       log.info("Connected to Firestore successfully");
     } catch (error) {
-      log.error("Failed to connect to Firestore:", error);
       throw error;
     }
   }
@@ -201,12 +206,12 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   // ==========================================
 
   async listTables(_filter?: FilterOptions): Promise<TableOrView[]> {
-    const collections = await this.firestoreDb.listCollections();
+    const collections = await this._db.listCollections();
 
     return collections.map((c: any) => ({
       name: c.id,
       entityType: "table" as const,
-      schema: null,
+      schema: undefined,
       parenttype: "r" as const,
     }));
   }
@@ -227,7 +232,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     if (!table) return [];
 
     // Sample documents to infer schema
-    const snapshot = await this.firestoreDb.collection(table).limit(10).get();
+    const snapshot = await this._db.collection(table).limit(10).get();
 
     if (snapshot.empty) {
       return [
@@ -236,7 +241,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
           columnName: "__name__",
           dataType: "string",
           tableName: table,
-          schemaName: schema || null,
+          schemaName: schema || undefined,
           nullable: true,
           bksField: { name: "__name__", bksType: "UNKNOWN" },
         },
@@ -260,7 +265,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         columnName: fieldName,
         dataType: primaryType,
         tableName: table,
-        schemaName: schema || null,
+        schemaName: schema || undefined,
         nullable: true,
         bksField: { name: fieldName, bksType: "UNKNOWN" },
       });
@@ -284,7 +289,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       columnName: "__name__",
       dataType: "string",
       tableName: table,
-      schemaName: schema || null,
+      schemaName: schema || undefined,
       nullable: false,
       bksField: { name: "__name__", bksType: "UNKNOWN" },
     });
@@ -347,7 +352,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   async getTableLength(table?: string, _schema?: string): Promise<number> {
     if (!table) return 0;
 
-    const snapshot = await this.firestoreDb.collection(table).count().get();
+    const snapshot = await this._db.collection(table).count().get();
     return snapshot.data().count;
   }
 
@@ -397,7 +402,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     _schema?: string,
     _selects?: string[]
   ): Promise<TableResult> {
-    let query: any = this.firestoreDb.collection(table);
+    let query: any = this._db.collection(table);
 
     // Apply filters
     if (typeof filters === "string" && filters.trim()) {
@@ -507,7 +512,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         columnName: f.name,
         dataType: "any",
       })),
-      cursor: null,
+      cursor: undefined as any,
     };
   }
 
@@ -519,7 +524,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         columnName: f.name,
         dataType: f.dataType || "any",
       })),
-      cursor: null,
+      cursor: undefined as any,
     };
   }
 
@@ -533,16 +538,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   ): Promise<TableUpdateResult[]> {
     const results: TableUpdateResult[] = [];
 
-// Get Firestore Timestamp and GeoPoint classes for value conversion
-    let TimestampClass: any = null;
-    let GeoPointClass: any = null;
-    try {
-      const firestoreModule = await import("firebase-admin/firestore");
-      TimestampClass = firestoreModule.Timestamp;
-      GeoPointClass = firestoreModule.GeoPoint;
-    } catch {
-      // Fall back to Date objects if import fails
-    }
+    const { TimestampClass, GeoPointClass } = await this._getFirebaseClasses();
 
     // Handle inserts
     if (changes.inserts?.length) {
@@ -551,8 +547,8 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
           const { __name__, ...data } = row;
           const convertedData = await this._unflattenForFirestore(data);
           const docRef = __name__
-            ? this.firestoreDb.collection(insert.table).doc(__name__)
-            : this.firestoreDb.collection(insert.table).doc();
+            ? this._db.collection(insert.table).doc(__name__)
+            : this._db.collection(insert.table).doc();
 
           await docRef.set(convertedData);
           results.push({
@@ -591,7 +587,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
           TimestampClass,
           GeoPointClass
         );
-        await this.firestoreDb
+        await this._db
           .collection(update.table)
           .doc(docId)
           .update({
@@ -611,7 +607,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
           (pk) => pk.column === "__name__"
         )?.value;
         if (!docId) continue;
-        await this.firestoreDb.collection(del.table).doc(docId).delete();
+        await this._db.collection(del.table).doc(docId).delete();
         results.push({
           primaryKeys: [{ column: "__name__", value: docId }],
           result: { __name__: docId },
@@ -645,7 +641,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   async createTable(table: CreateTableSpec): Promise<void> {
     // In Firestore, collections are created implicitly when documents are added
     // We create a placeholder document
-    await this.firestoreDb.collection(table.table).doc("__placeholder__").set({
+    await this._db.collection(table.table).doc("__placeholder__").set({
       __created__: true,
       __createdAt__: new Date(),
     });
@@ -657,13 +653,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     _schema?: string
   ): Promise<void> {
     if (typeOfElement === DatabaseElement.TABLE) {
-      // Delete all documents in the collection
-      const snapshot = await this.firestoreDb.collection(elementName).get();
-      const batch = this.firestoreDb.batch();
-      snapshot.docs.forEach((doc: any) => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
+      await this._deleteCollection(elementName);
     } else {
       throw new Error(
         `Not supported: Cannot drop ${typeOfElement} in Firestore`
@@ -685,12 +675,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     _schema?: string
   ): Promise<void> {
     if (typeOfElement === DatabaseElement.TABLE) {
-      const snapshot = await this.firestoreDb.collection(elementName).get();
-      const batch = this.firestoreDb.batch();
-      snapshot.docs.forEach((doc: any) => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
+      await this._deleteCollection(elementName);
     }
   }
 
@@ -757,10 +742,10 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     duplicateTableName: string,
     _schema?: string
   ): Promise<void> {
-    const snapshot = await this.firestoreDb.collection(tableName).get();
-    const batch = this.firestoreDb.batch();
+    const snapshot = await this._db.collection(tableName).get();
+    const batch = this._db.batch();
     for (const doc of snapshot.docs) {
-      const newDocRef = this.firestoreDb
+      const newDocRef = this._db
         .collection(duplicateTableName)
         .doc(doc.id);
       batch.set(newDocRef, doc.data());
@@ -858,7 +843,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
   async syncDatabase(): Promise<void> {
     // Refresh collections cache
-    await this.firestoreDb.listCollections();
+    await this._db.listCollections();
   }
 
   // Import/export stubs
@@ -924,6 +909,24 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   // Private helpers
   // ==========================================
 
+  private async _getFirebaseClasses(): Promise<{ TimestampClass: any; GeoPointClass: any }> {
+    try {
+      const firestoreModule = await import("firebase-admin/firestore");
+      return { TimestampClass: firestoreModule.Timestamp, GeoPointClass: firestoreModule.GeoPoint };
+    } catch {
+      return { TimestampClass: null, GeoPointClass: null };
+    }
+  }
+
+  private async _deleteCollection(collectionName: string): Promise<void> {
+    const snapshot = await this._db.collection(collectionName).get();
+    const batch = this._db.batch();
+    for (const doc of snapshot.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
   /**
    * Execute a Firestore query from the editor.
    * Supports JavaScript-like syntax:
@@ -939,7 +942,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     try {
       // Handle collection listing
       if (trimmed === "list collections" || trimmed === "show collections") {
-        const collections = await this.firestoreDb.listCollections();
+        const collections = await this._db.listCollections();
         const rows = collections.map((c: any) => ({ collection: c.id }));
         return {
           rows,
@@ -955,11 +958,8 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       const result = await this._parseAndExecuteQuery(trimmed);
       return result;
     } catch (error) {
-      return {
-        rows: [],
-        fields: [],
-        rowCount: 0,
-      } as NgQueryResult;
+      log.error("Firestore query failed:", error);
+      throw error;
     }
   }
 
@@ -980,14 +980,14 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     let query: any;
 
     if (collectionGroupMatch) {
-      query = this.firestoreDb.collectionGroup(collectionGroupMatch[1]);
+      query = this._db.collectionGroup(collectionGroupMatch[1]);
     } else if (collectionMatch) {
-      query = this.firestoreDb.collection(collectionMatch[1]);
+      query = this._db.collection(collectionMatch[1]);
     } else {
       // Try to evaluate as a direct collection name
       const simpleMatch = queryText.match(/^['"]([^'"]+)['"]$/);
       if (simpleMatch) {
-        query = this.firestoreDb.collection(simpleMatch[1]);
+        query = this._db.collection(simpleMatch[1]);
       } else {
         throw new Error(
           "Invalid query format. Use:\n" +
@@ -1020,13 +1020,15 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     // Parse limit
     const limitMatch = queryText.match(/\.limit\(\s*(\d+)\s*\)/);
     if (limitMatch) {
-      query = query.limit(parseInt(limitMatch[1]));
+      const limitVal = parseInt(limitMatch[1], 10);
+      if (!isNaN(limitVal) && limitVal > 0) query = query.limit(limitVal);
     }
 
     // Parse offset
     const offsetMatch = queryText.match(/\.offset\(\s*(\d+)\s*\)/);
     if (offsetMatch) {
-      query = query.offset(parseInt(offsetMatch[1]));
+      const offsetVal = parseInt(offsetMatch[1], 10);
+      if (!isNaN(offsetVal) && offsetVal > 0) query = query.offset(offsetVal);
     }
 
     // Execute the query
@@ -1249,16 +1251,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   ): Promise<Record<string, any>> {
     const result: Record<string, any> = {};
 
-    // Get Firestore Timestamp and GeoPoint classes for value conversion
-    let TimestampClass: any = null;
-    let GeoPointClass: any = null;
-    try {
-      const firestoreModule = await import("firebase-admin/firestore");
-      TimestampClass = firestoreModule.Timestamp;
-      GeoPointClass = firestoreModule.GeoPoint;
-    } catch {
-      // Fall back to Date objects if import fails
-    }
+    const { TimestampClass, GeoPointClass } = await this._getFirebaseClasses();
 
     for (const [key, value] of Object.entries(data)) {
       if (key === "__name__") continue;
@@ -1377,7 +1370,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       const parts = value.split("/");
       if (parts.length >= 2 && parts.length % 2 === 0) {
         try {
-          return this.firestoreDb.doc(value);
+          return this._db.doc(value);
         } catch {
           // If doc() fails, keep as string
         }

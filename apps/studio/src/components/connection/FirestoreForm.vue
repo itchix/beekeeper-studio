@@ -25,11 +25,15 @@
 
     <!-- Service Account JSON (direct paste) -->
     <div v-if="authType === 'serviceAccount'" class="form-group">
-      <label for="serviceAccountJson">Service Account JSON</label>
+      <label for="serviceAccountJson">
+        Service Account JSON
+        <small class="text-muted">(required if no file path)</small>
+      </label>
       <textarea
         id="serviceAccountJson"
         class="form-control"
         v-model="serviceAccountJson"
+        @input="onJsonInput"
         placeholder='Paste your service account JSON key here...'
         rows="6"
         style="font-family: monospace; font-size: 12px;"
@@ -44,16 +48,20 @@
 
     <!-- Service Account File Path -->
     <div v-if="authType === 'serviceAccount'" class="form-group">
-      <label for="serviceAccountPath">Or: Service Account File Path</label>
+      <label for="serviceAccountPath">
+        Or: Service Account File Path
+        <small class="text-muted">(required if no JSON above)</small>
+      </label>
       <input
         id="serviceAccountPath"
         type="text"
         class="form-control"
         v-model="serviceAccountPath"
+        @input="onPathInput"
         placeholder="/path/to/service-account-key.json"
       />
       <small class="form-text text-muted">
-        Alternatively, provide the file path to your service account key JSON.
+        Provide the file path to your service account key JSON. Filling this clears the JSON field above.
       </small>
     </div>
 
@@ -90,13 +98,29 @@
 </template>
 
 <script lang="ts">
+import { PropType } from 'vue'
 import { FirestoreAuthType } from '@/lib/db/types'
+
+function firestoreOption(key: string) {
+  return {
+    get(this: any) {
+      const defaults: Record<string, string> = { databaseId: '(default)' }
+      return this.config.firestoreOptions?.[key] ?? defaults[key] ?? ''
+    },
+    set(this: any, value: string) {
+      this.$set(this.config, 'firestoreOptions', {
+        ...this.config.firestoreOptions,
+        [key]: value,
+      })
+    },
+  }
+}
 
 export default {
   name: 'FirestoreForm',
   props: {
     config: {
-      type: Object,
+      type: Object as PropType<any>,
       required: true,
     },
     testing: {
@@ -107,79 +131,48 @@ export default {
   data() {
     return {
       authTypes: [
-        { name: 'Service Account Key', value: FirestoreAuthType.ServiceAccount },
-        { name: 'Application Default Credentials', value: FirestoreAuthType.ApplicationDefault },
+        { name: 'Service Account Key',             value: FirestoreAuthType.ServiceAccount        },
+        { name: 'Application Default Credentials', value: FirestoreAuthType.ApplicationDefault    },
       ],
     }
   },
   computed: {
-    authType: {
-      get() {
-        return this.config.firestoreOptions?.authType || FirestoreAuthType.ServiceAccount
-      },
-      set(value) {
-        this.$set(this.config, 'firestoreOptions', {
-          ...this.config.firestoreOptions,
-          authType: value,
-        })
-      },
-    },
-    serviceAccountJson: {
-      get() {
-        return this.config.firestoreOptions?.serviceAccountJson || ''
-      },
-      set(value) {
-        this.$set(this.config, 'firestoreOptions', {
-          ...this.config.firestoreOptions,
-          serviceAccountJson: value,
-        })
-      },
-    },
-    serviceAccountPath: {
-      get() {
-        return this.config.firestoreOptions?.serviceAccountPath || ''
-      },
-      set(value) {
-        this.$set(this.config, 'firestoreOptions', {
-          ...this.config.firestoreOptions,
-          serviceAccountPath: value,
-        })
-      },
-    },
-    projectId: {
-      get() {
-        return this.config.firestoreOptions?.projectId || ''
-      },
-      set(value) {
-        this.$set(this.config, 'firestoreOptions', {
-          ...this.config.firestoreOptions,
-          projectId: value,
-        })
-      },
-    },
-    databaseId: {
-      get() {
-        return this.config.firestoreOptions?.databaseId || '(default)'
-      },
-      set(value) {
-        this.$set(this.config, 'firestoreOptions', {
-          ...this.config.firestoreOptions,
-          databaseId: value,
-        })
-      },
-    },
+    authType:           firestoreOption('authType'),
+    serviceAccountJson: firestoreOption('serviceAccountJson'),
+    serviceAccountPath: firestoreOption('serviceAccountPath'),
+    projectId:          firestoreOption('projectId'),
+    databaseId:         firestoreOption('databaseId'),
   },
   mounted() {
-    // Initialize firestoreOptions if not present or empty
-    if (!this.config.firestoreOptions || !this.config.firestoreOptions.authType) {
+    if (!this.config.firestoreOptions?.authType) {
       this.$set(this.config, 'firestoreOptions', {
-        authType: FirestoreAuthType.ServiceAccount,
+        authType:           FirestoreAuthType.ServiceAccount,
         serviceAccountJson: '',
         serviceAccountPath: '',
-        projectId: '',
-        databaseId: '(default)',
+        projectId:          '',
+        databaseId:         '(default)',
       })
     }
+  },
+  methods: {
+    // Mutual exclusivity: filling JSON clears the file path
+    onJsonInput() {
+      if (this.serviceAccountJson?.trim()) {
+        this.$set(this.config, 'firestoreOptions', {
+          ...this.config.firestoreOptions,
+          serviceAccountPath: '',
+        })
+      }
+    },
+    // Mutual exclusivity: filling file path clears the JSON
+    onPathInput() {
+      if (this.serviceAccountPath?.trim()) {
+        this.$set(this.config, 'firestoreOptions', {
+          ...this.config.firestoreOptions,
+          serviceAccountJson: '',
+        })
+      }
+    },
   },
 }
 </script>
