@@ -124,32 +124,31 @@ export default {
   data() {
     return {
       authTypes: [
-        { name: 'Service Account Key',             value: FirestoreAuthType.ServiceAccount        },
-        { name: 'Application Default Credentials', value: FirestoreAuthType.ApplicationDefault    },
+        { name: 'Service Account Key', value: FirestoreAuthType.ServiceAccount },
+        { name: 'Application Default Credentials', value: FirestoreAuthType.ApplicationDefault },
       ],
     }
   },
   computed: {
-    authType:           firestoreOption('authType'),
+    authType: firestoreOption('authType'),
     serviceAccountJson: firestoreOption('serviceAccountJson'),
     serviceAccountPath: firestoreOption('serviceAccountPath'),
-    projectId:          firestoreOption('projectId'),
-    databaseId:         firestoreOption('databaseId'),
+    projectId: firestoreOption('projectId'),
+    databaseId: firestoreOption('databaseId'),
   },
   mounted() {
     if (!this.config.firestoreOptions?.authType) {
       this.$set(this.config, 'firestoreOptions', {
-        authType:           FirestoreAuthType.ServiceAccount,
+        authType: FirestoreAuthType.ServiceAccount,
         serviceAccountJson: '',
         serviceAccountPath: '',
-        projectId:          '',
-        databaseId:         '(default)',
+        projectId: '',
+        databaseId: '(default)',
       })
     }
   },
   methods: {
-    // Mutual exclusivity: clearing the opposing field only on blur
-    // to avoid wiping user data on the first keystroke
+    // clear opposing field on blur to avoid data loss
     onJsonBlur() {
       if (this.serviceAccountJson?.trim()) {
         this.$set(this.config, 'firestoreOptions', {

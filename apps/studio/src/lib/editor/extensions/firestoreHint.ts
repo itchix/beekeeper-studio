@@ -1,22 +1,20 @@
 import {
   CompletionContext,
   CompletionResult,
-} from "@codemirror/autocomplete";
+} from '@codemirror/autocomplete';
 import {
   EditorState,
   StateEffect,
   StateField,
-} from "@codemirror/state";
-import { EditorView, ViewPlugin } from "@codemirror/view";
-import { TableOrView } from "@/lib/db/models";
-import rawLog from "@bksLogger";
+} from '@codemirror/state';
+import { EditorView, ViewPlugin } from '@codemirror/view';
+import { TableOrView } from '@/lib/db/models';
+import rawLog from '@bksLogger';
 
-const log = rawLog.scope("firestorehint");
+const log = rawLog.scope('firestorehint');
 
 let completionRequestCounter = 0;
 
-// Pre-compiled regexes
-// Support hyphens in identifiers (Firestore allows them in collection/field names)
 const RE_COLLECTION_ARG  = /collection\(\s*['"]?([\w-]*)$/;
 const RE_WHERE_FIELD     = /\.where\(\s*['"]?([\w.-]*)$/;
 const RE_WHERE_OP        = /\.where\(\s*['"][\w.-]+['"]\s*,\s*['"]?([\w-]*)$/;
@@ -26,8 +24,8 @@ const RE_LINE_START      = /^\s*(db)?\.?\s*$/;
 const RE_COLLECTION_NAME = /collection\(\s*['"]([^'"]+)['"]\s*\)/g;
 
 const DIRECTION_OPTIONS = [
-  { label: "asc",  type: "keyword", info: "Ascending order"  },
-  { label: "desc", type: "keyword", info: "Descending order" },
+  { label: 'asc',  type: 'keyword', info: 'Ascending order'  },
+  { label: 'desc', type: 'keyword', info: 'Descending order' },
 ];
 
 const setTablesEffect = StateEffect.define<() => TableOrView[]>();
@@ -54,35 +52,35 @@ const columnsGetterField = StateField.define<((tableName: string) => Promise<str
 });
 
 const FIRESTORE_METHODS = [
-  { label: "where(",      type: "function", detail: "field, op, value",  info: "Add a filter constraint"      },
-  { label: "orderBy(",    type: "function", detail: "field, direction?",  info: "Sort results by field"        },
-  { label: "limit(",      type: "function", detail: "number",             info: "Limit number of results"      },
-  { label: "offset(",     type: "function", detail: "number",             info: "Skip number of results"       },
-  { label: "startAt(",    type: "function", detail: "value",              info: "Start at a specific value"    },
-  { label: "startAfter(", type: "function", detail: "value",              info: "Start after a specific value" },
-  { label: "endAt(",      type: "function", detail: "value",              info: "End at a specific value"      },
-  { label: "endBefore(",  type: "function", detail: "value",              info: "End before a specific value"  },
-  { label: "get()",       type: "function", detail: "",                   info: "Execute the query"            },
-  { label: "select(",     type: "function", detail: "fields...",          info: "Select specific fields"       },
+  { label: 'where(',      type: 'function', detail: 'field, op, value',  info: 'Add a filter constraint'      },
+  { label: 'orderBy(',    type: 'function', detail: 'field, direction?',  info: 'Sort results by field'        },
+  { label: 'limit(',      type: 'function', detail: 'number',             info: 'Limit number of results'      },
+  { label: 'offset(',     type: 'function', detail: 'number',             info: 'Skip number of results'       },
+  { label: 'startAt(',    type: 'function', detail: 'value',              info: 'Start at a specific value'    },
+  { label: 'startAfter(', type: 'function', detail: 'value',              info: 'Start after a specific value' },
+  { label: 'endAt(',      type: 'function', detail: 'value',              info: 'End at a specific value'      },
+  { label: 'endBefore(',  type: 'function', detail: 'value',              info: 'End before a specific value'  },
+  { label: 'get()',       type: 'function', detail: '',                   info: 'Execute the query'            },
+  { label: 'select(',     type: 'function', detail: 'fields...',          info: 'Select specific fields'       },
 ];
 
 const FIRESTORE_OPERATORS = [
-  { label: "==",                  type: "keyword", info: "Equal to"                    },
-  { label: "!=",                  type: "keyword", info: "Not equal to"                },
-  { label: "<",                   type: "keyword", info: "Less than"                   },
-  { label: "<=",                  type: "keyword", info: "Less than or equal to"       },
-  { label: ">",                   type: "keyword", info: "Greater than"                },
-  { label: ">=",                  type: "keyword", info: "Greater than or equal to"    },
-  { label: "in",                  type: "keyword", info: "Value in array"              },
-  { label: "not-in",              type: "keyword", info: "Value not in array"          },
-  { label: "array-contains",      type: "keyword", info: "Array contains value"        },
-  { label: "array-contains-any",  type: "keyword", info: "Array contains any value"    },
+  { label: '==',                  type: 'keyword', info: 'Equal to'                    },
+  { label: '!=',                  type: 'keyword', info: 'Not equal to'                },
+  { label: '<',                   type: 'keyword', info: 'Less than'                   },
+  { label: '<=',                  type: 'keyword', info: 'Less than or equal to'       },
+  { label: '>',                   type: 'keyword', info: 'Greater than'                },
+  { label: '>=',                  type: 'keyword', info: 'Greater than or equal to'    },
+  { label: 'in',                  type: 'keyword', info: 'Value in array'              },
+  { label: 'not-in',              type: 'keyword', info: 'Value not in array'          },
+  { label: 'array-contains',      type: 'keyword', info: 'Array contains value'        },
+  { label: 'array-contains-any',  type: 'keyword', info: 'Array contains any value'    },
 ];
 
 const FIRESTORE_TOP_LEVEL = [
-  { label: "db",          type: "variable", info: "Firestore database reference" },
-  { label: "collection(", type: "function", detail: "name", info: "Reference a collection" },
-  { label: "doc(",        type: "function", detail: "path", info: "Reference a document"   },
+  { label: 'db',          type: 'variable', info: 'Firestore database reference' },
+  { label: 'collection(', type: 'function', detail: 'name', info: 'Reference a collection' },
+  { label: 'doc(',        type: 'function', detail: 'path', info: 'Reference a document'   },
 ];
 
 function extractCollectionName(text: string): string | null {
@@ -109,7 +107,7 @@ async function completionSource(
   const columnsGetter = context.state.field(columnsGetterField);
 
   if (!tablesGetter) {
-    log.warn("Firestore hint called without tablesGetter");
+    log.warn('Firestore hint called without tablesGetter');
     return null;
   }
 
@@ -117,24 +115,20 @@ async function completionSource(
   const pos = context.pos;
   const line = context.state.doc.lineAt(pos);
 
-  // Use full document text for expression matching (supports multi-line queries)
   const fullText = textBeforeCursor(context);
-  // Use current line for line-local patterns (collection arg, line start)
   const lineText = line.text.slice(0, pos - line.from);
 
-  // 1. After "collection(" — suggest collection names
   const collectionMatch = lineText.match(RE_COLLECTION_ARG);
   if (collectionMatch) {
     const prefix = collectionMatch[1];
     const options = filterByPrefix(
-      tables.map(t => ({ label: t.name, type: "class" as const, info: `Collection: ${t.name}` })),
+      tables.map(t => ({ label: t.name, type: 'class' as const, info: `Collection: ${t.name}` })),
       prefix
     );
     if (options.length === 0) return null;
     return { from: pos - prefix.length, options };
   }
 
-  // 2. After ".where(" — suggest field names from the current collection
   const whereFieldMatch = lineText.match(RE_WHERE_FIELD);
   if (whereFieldMatch) {
     const prefix = whereFieldMatch[1];
@@ -147,18 +141,17 @@ async function completionSource(
           return {
             from: pos - prefix.length,
             options: filterByPrefix(
-              columns.map(col => ({ label: col, type: "property" as const, info: `Field: ${col}` })),
+              columns.map(col => ({ label: col, type: 'property' as const, info: `Field: ${col}` })),
               prefix
             ),
           };
         }
       } catch (err) {
-        log.error("Error fetching columns for Firestore hint:", err);
+        log.error('Error fetching columns for Firestore hint:', err);
       }
     }
   }
 
-  // 3. After a field name in .where() — suggest operators
   const whereOpMatch = lineText.match(RE_WHERE_OP);
   if (whereOpMatch) {
     const prefix = whereOpMatch[1];
@@ -168,7 +161,6 @@ async function completionSource(
     };
   }
 
-  // 4. After ".orderBy(" — suggest field names + direction keywords
   const orderByMatch = lineText.match(RE_ORDER_BY);
   if (orderByMatch) {
     const prefix = orderByMatch[1];
@@ -182,7 +174,7 @@ async function completionSource(
             from: pos - prefix.length,
             options: [
               ...filterByPrefix(
-                columns.map(col => ({ label: col, type: "property" as const, info: `Field: ${col}` })),
+                columns.map(col => ({ label: col, type: 'property' as const, info: `Field: ${col}` })),
                 prefix
               ),
               ...DIRECTION_OPTIONS,
@@ -190,23 +182,20 @@ async function completionSource(
           };
         }
       } catch (err) {
-        log.error("Error fetching columns for Firestore hint:", err);
+        log.error('Error fetching columns for Firestore hint:', err);
       }
     }
   }
 
-  // 5. After a dot following a collection reference — suggest methods
-  //    Use full text to support multi-line chains
   if (fullText.match(RE_METHOD_DOT)) {
     return { from: pos, options: FIRESTORE_METHODS };
   }
 
-  // 6. At start of line or after "db." — suggest top-level completions
   const startMatch = lineText.match(RE_LINE_START);
   if (startMatch) {
     const prefix = lineText.trim();
-    if (prefix === "" || prefix === "db" || prefix === "db.") {
-      const fromPos = prefix === "db." ? pos : pos - prefix.length;
+    if (prefix === '' || prefix === 'db' || prefix === 'db.') {
+      const fromPos = prefix === 'db.' ? pos : pos - prefix.length;
       return {
         from: fromPos,
         options: FIRESTORE_TOP_LEVEL,
@@ -240,7 +229,7 @@ export function firestoreHintExtension() {
 
   function setTablesGetter(getter: () => TableOrView[]) {
     if (!view) {
-      log.warn("Calling `setTablesGetter` before extension is initialized.");
+      log.warn('Calling `setTablesGetter` before extension is initialized.');
       return;
     }
     view.dispatch({ effects: setTablesEffect.of(getter) });
@@ -248,7 +237,7 @@ export function firestoreHintExtension() {
 
   function setColumnsGetter(getter: (tableName: string) => Promise<string[] | null>) {
     if (!view) {
-      log.warn("Calling `setColumnsGetter` before extension is initialized.");
+      log.warn('Calling `setColumnsGetter` before extension is initialized.');
       return;
     }
     view.dispatch({ effects: setColumnsGetterEffect.of(getter) });

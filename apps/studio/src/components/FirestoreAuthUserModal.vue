@@ -109,7 +109,7 @@
 <script lang="ts">
 import Vue from 'vue'
 import { mapState } from 'vuex'
-import { FirestoreAuthUser } from '@/lib/db/types'
+import { FirestoreAuthUser, UpdateFirestoreAuthUserRequest } from '@/lib/db/types'
 
 export default Vue.extend({
   name: 'FirestoreAuthUserModal',
@@ -130,7 +130,7 @@ export default Vue.extend({
       saving: false,
       deleting: false,
       error: '',
-      _isDestroyed: false,
+      isDestroyed: false,
     }
   },
   computed: {
@@ -150,11 +150,11 @@ export default Vue.extend({
   methods: {
     async save() {
       this.error = ''
-      if (this._isDestroyed) return
+      if (this.isDestroyed) return
       this.saving = true
       try {
         if (this.isEditing) {
-          const data: any = {}
+          const data: UpdateFirestoreAuthUserRequest = {}
           if (this.form.password.trim()) data.password = this.form.password
           if (this.form.displayName !== (this.user?.displayName || '')) data.displayName = this.form.displayName
           if (this.form.disabled !== this.user?.disabled) data.disabled = this.form.disabled
@@ -181,7 +181,7 @@ export default Vue.extend({
         'Delete user?',
         `Are you sure you want to delete ${this.user?.email || this.user?.uid}? This action cannot be undone.`
       )
-      if (this._isDestroyed) return
+      if (this.isDestroyed) return
       if (!confirmed) return
 
       this.deleting = true
@@ -205,9 +205,6 @@ export default Vue.extend({
       }
     },
   },
-  beforeDestroy() {
-    this._isDestroyed = true
-  },
   mounted() {
     if (this.user) {
       this.form.email = this.user.email || ''
@@ -219,6 +216,9 @@ export default Vue.extend({
       const input = this.$refs.emailInput as HTMLInputElement
       if (input) input.focus()
     })
+  },
+  beforeDestroy() {
+    this.isDestroyed = true
   },
 })
 </script>

@@ -110,7 +110,7 @@ export default Vue.extend({
       searchQuery: '',
       selectedUser: null as FirestoreAuthUser | null,
       showModal: false,
-      _isDestroyed: false,
+      isDestroyed: false,
     }
   },
   computed: {
@@ -144,7 +144,7 @@ export default Vue.extend({
 
       try {
         const result = await this.connection.listAuthUsers(pageToken)
-        if (this._isDestroyed) return
+        if (this.isDestroyed) return
         if (isFirstPage) {
           this.users = result.users
         } else {
@@ -159,7 +159,7 @@ export default Vue.extend({
       }
     },
     async loadMore() {
-      if (this._isDestroyed) return
+      if (this.isDestroyed) return
       if (this.nextPageToken) {
         await this.fetchUsers(this.nextPageToken)
       }
@@ -177,12 +177,12 @@ export default Vue.extend({
       this.selectedUser = null
     },
     onUserSaved() {
-      if (this._isDestroyed) return
+      if (this.isDestroyed) return
       this.closeModal()
       this.fetchUsers()
     },
     onUserDeleted() {
-      if (this._isDestroyed) return
+      if (this.isDestroyed) return
       this.closeModal()
       this.fetchUsers()
     },
@@ -208,7 +208,7 @@ export default Vue.extend({
     }
   },
   beforeDestroy() {
-    this._isDestroyed = true
+    this.isDestroyed = true
   },
 })
 </script>
