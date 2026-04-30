@@ -355,6 +355,7 @@ declare interface IBksConfig {
             cloneSelection: string;
             copySelection: string;
             deleteSelection: string;
+            jsonViewerSidebar: string;
             openInSqlEditor: string;
             openQuickSearch: string;
             pasteSelection: string;
@@ -369,13 +370,13 @@ declare interface IBksConfig {
             manualCommit: string;
             manualRollback: string;
             openTableFilter: string;
+            primaryQueryAction: string[];
+            primaryQueryToFileAction: string;
+            secondaryQueryAction: string[];
+            secondaryQueryToFileAction: string;
             selectEditor: string;
             selectNextResult: string;
             selectPreviousResult: string;
-            submitCurrentQuery: string[];
-            submitCurrentQueryToFile: string;
-            submitQueryToFile: string;
-            submitTabQuery: string[];
             switchPaneFocus: string;
         };
         quickSearch: {
@@ -417,7 +418,7 @@ declare interface IBksConfig {
         };
     };
     pluginSystem: {
-        allow: any[];
+        allow: string[];
         communityDisabled: boolean;
         disabled: boolean;
     };
@@ -453,6 +454,8 @@ declare interface IBksConfig {
         queryEditor: {
             defaultFormatter: string;
             maxResults: number;
+            primaryQueryAction: string;
+            secondaryQueryAction: string;
         };
         tableList: {
             itemHeight: number;
