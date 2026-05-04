@@ -133,6 +133,7 @@ export interface DialectData {
   requireDataset?: boolean,
   disallowedSortColumns?: string[],
   rawFilterPlaceholder?: string,
+  rawFilterOperators?: string[],
   /** Is it called "sql" or "code" in this dialect? */
   sqlLabel: "SQL" | "code";
   disabledFeatures?: {

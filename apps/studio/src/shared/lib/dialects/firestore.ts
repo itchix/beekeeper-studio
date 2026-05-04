@@ -19,7 +19,8 @@ export const FirestoreData: DialectData = {
   usesOffsetPagination: false,
   queryDialectOverride: "generic",
   textEditorMode: "text/x-javascript",
-  rawFilterPlaceholder: "field = value  (e.g. status = active, age > 30)",
+  rawFilterPlaceholder: "field operator value  (e.g. status = active, age > 30, name startsWith Jo)",
+  rawFilterOperators: ['=', '!=', '<', '<=', '>', '>=', 'startsWith'],
   disabledFeatures: {
     manualCommit: true,
     resultEditing: false,
