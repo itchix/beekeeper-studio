@@ -166,6 +166,26 @@
 
         <div class="editor-help expand" />
         <div class="expand" />
+        <template v-if="isFirestore">
+          <div class="btn-group view-mode-toggle">
+            <x-button
+              class="btn btn-flat btn-small"
+              :class="{ active: viewMode === 'grid' }"
+              title="Grid view"
+              @click.prevent="viewMode = 'grid'"
+            >
+              <i class="material-icons">grid_on</i>
+            </x-button>
+            <x-button
+              class="btn btn-flat btn-small"
+              :class="{ active: viewMode === 'tree' }"
+              title="Tree view"
+              @click.prevent="viewMode = 'tree'"
+            >
+              <i class="material-icons">account_tree</i>
+            </x-button>
+          </div>
+        </template>
         <div class="actions btn-group">
           <x-button
             v-if="showDryRun"
@@ -264,6 +284,15 @@
         @cancel="cancelQuery"
         :message="runningText"
         v-if="running"
+      />
+      <firestore-tree-view
+        v-else-if="isFirestore && viewMode === 'tree'"
+        ref="treeView"
+        :connection="connection"
+        :rows="result ? result.rows || [] : []"
+        :fields="result ? result.fields || [] : []"
+        :mode="(result && result.rows && result.rows.length > 0) ? 'results' : 'explorer'"
+        :style="{ height: tableHeight + 'px' }"
       />
       <result-table
         ref="table"
@@ -518,6 +547,7 @@
   import { EditorMarker } from '@/lib/editor/utils'
   import ProgressBar from './editor/ProgressBar.vue'
   import ResultTable from './editor/ResultTable.vue'
+  import FirestoreTreeView from './editor/FirestoreTreeView.vue'
   import ShortcutHints from './editor/ShortcutHints.vue'
   import SqlTextEditor from "@beekeeperstudio/ui-kit/vue/sql-text-editor"
   import BksSuperFormatter from "@beekeeperstudio/ui-kit/vue/super-formatter"
@@ -551,7 +581,7 @@ import { KeybindingPath } from '@/common/bksConfig/BksConfigProvider'
 
   export default {
     // this.queryText holds the current editor value, always
-    components: { ResultTable, ProgressBar, ShortcutHints, QueryEditorStatusBar, ErrorAlert, MergeManager, SqlTextEditor, SurrealTextEditor, BksSuperFormatter},
+    components: { ResultTable, ProgressBar, ShortcutHints, QueryEditorStatusBar, ErrorAlert, MergeManager, SqlTextEditor, SurrealTextEditor, BksSuperFormatter, FirestoreTreeView },
     props: {
       tab: Object as PropType<TransportOpenTab>,
       active: Boolean
@@ -626,7 +656,8 @@ import { KeybindingPath } from '@/common/bksConfig/BksConfigProvider'
         },
         editingResult: false,
         resultsEditData: [],
-        resultEditableMap: []
+        resultEditableMap: [],
+        viewMode: 'grid' as 'grid' | 'tree',
       }
     },
     computed: {
@@ -662,6 +693,9 @@ import { KeybindingPath } from '@/common/bksConfig/BksConfigProvider'
       },
       enabled() {
         return !this.dialectData?.disabledFeatures?.queryEditor;
+      },
+      isFirestore(): boolean {
+        return this.connectionType === 'firestore'
       },
       disableRunToFile() {
         return this.dialectData?.disabledFeatures?.export?.stream
