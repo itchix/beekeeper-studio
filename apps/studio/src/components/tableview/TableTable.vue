@@ -29,6 +29,7 @@
       <!-- Tree view for Firestore -->
       <firestore-tree-view
         v-if="isFirestore && viewMode === 'tree'"
+        class="table-view-wrapper"
         :connection="connection"
         :rows="data || []"
         :fields="treeFields"
