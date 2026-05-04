@@ -425,12 +425,29 @@ export default Vue.extend({
         })
     },
 
-    addChildNodes(parent: FirestoreTreeNode, children: FirestoreTreeNode[]) {
-      const lastChildIdx = this.nodes.reduce((lastIdx, n, i) => {
-        return n.parentId === parent.id ? i : lastIdx
-      }, -1)
+    findLastDescendantIndex(parent: FirestoreTreeNode): number {
+      let lastIdx = -1
+      for (let i = 0; i < this.nodes.length; i++) {
+        const n = this.nodes[i]
+        if (n.id === parent.id) {
+          lastIdx = i
+        } else if (n.parentId) {
+          let ancestorId: string | undefined = n.parentId
+          while (ancestorId) {
+            if (ancestorId === parent.id) {
+              lastIdx = i
+              break
+            }
+            const ancestor = this.nodes.find(a => a.id === ancestorId)
+            ancestorId = ancestor?.parentId
+          }
+        }
+      }
+      return lastIdx
+    },
 
-      const insertIdx = lastChildIdx >= 0 ? lastChildIdx + 1 : this.nodes.indexOf(parent) + 1
+    addChildNodes(parent: FirestoreTreeNode, children: FirestoreTreeNode[]) {
+      const insertIdx = this.findLastDescendantIndex(parent) + 1
       this.nodes.splice(insertIdx, 0, ...children)
     },
 
