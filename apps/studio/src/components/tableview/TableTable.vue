@@ -27,14 +27,18 @@
         No Data
       </div>
       <!-- Tree view for Firestore -->
-      <firestore-tree-view
+      <div
         v-if="isFirestore && viewMode === 'tree'"
         class="table-view-wrapper"
-        :connection="connection"
-        :rows="data || []"
-        :fields="treeFields"
-        :mode="(data && data.length > 0) ? 'results' : 'explorer'"
-      />
+      >
+        <firestore-tree-view
+          :connection="connection"
+          :rows="data || []"
+          :fields="treeFields"
+          :mode="(data && data.length > 0) ? 'results' : 'explorer'"
+          style="flex: 1; min-height: 0;"
+        />
+      </div>
       <!-- Grid view (Tabulator) -->
       <div
         v-show="!isFirestore || viewMode === 'grid'"
