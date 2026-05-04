@@ -202,7 +202,15 @@ export default Vue.extend({
         }
       })
 
-      this.nodes = docNodes
+      // Flatten: for each doc, insert doc then its field children
+      for (const doc of docNodes) {
+        this.nodes.push(doc)
+        if (doc.children) {
+          for (const field of doc.children) {
+            this.nodes.push(field)
+          }
+        }
+      }
     },
 
     makeCollectionNode(name: string): FirestoreTreeNode {
@@ -315,6 +323,13 @@ export default Vue.extend({
         collectionNode.childCount = docNodes.length
         this.addChildNodes(collectionNode, docNodes)
         this.pageCursors[name] = result.pageState || null
+
+        // Also flatten field children into nodes array after each document
+        for (const doc of docNodes) {
+          if (doc.children && doc.children.length > 0) {
+            this.addChildNodes(doc, doc.children)
+          }
+        }
       } catch (err: any) {
         this.error = err.message || `Failed to load ${name}`
       } finally {
@@ -347,6 +362,13 @@ export default Vue.extend({
           collectionNode.childCount = collectionNode.children.length
           this.addChildNodes(collectionNode, newDocs)
           this.pageCursors[name] = result.pageState || null
+
+          // Also flatten field children for each new document
+          for (const doc of newDocs) {
+            if (doc.children && doc.children.length > 0) {
+              this.addChildNodes(doc, doc.children)
+            }
+          }
         } catch (err: any) {
           this.error = err.message || 'Failed to load more'
         }
@@ -418,11 +440,6 @@ export default Vue.extend({
 
       const parent = this.nodes.find(n => n.id === node.parentId)
       if (!parent || !parent.expanded) return false
-
-      if (node.level >= 2 && parent.parentId) {
-        const grandparent = this.nodes.find(n => n.id === parent.parentId)
-        if (grandparent && !grandparent.expanded) return false
-      }
 
       return true
     },
