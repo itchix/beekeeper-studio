@@ -426,7 +426,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
           continue;
         }
         const { field, op, value } = this.parseFilter(filter);
-        if (field && op) {
+        if (!field || !op) continue;
+        if (op === 'startsWith') {
+          query = query.where(field, '>=', value);
+          query = query.where(field, '<', value + '\uf8ff');
+        } else {
           query = query.where(field, op, value);
         }
       }
@@ -1127,6 +1131,9 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
     if (comparisonOp === "is not") {
       return { field, op: "!=", value: null };
+    }
+    if (comparisonOp === "startsWith") {
+      return { field, op: "startsWith", value: String(filter.value ?? '') };
     }
 
     const op = this.translateOperator(comparisonOp);

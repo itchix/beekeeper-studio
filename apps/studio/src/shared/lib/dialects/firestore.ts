@@ -16,7 +16,7 @@ export const FirestoreData: DialectData = {
     manualCommit: true,
     resultEditing: false,
     readOnlyPrimaryKeys: true,
-    builderFilters: false,
+    builderFilters: true,
     shell: true,
     informationSchema: {
       extra: true,

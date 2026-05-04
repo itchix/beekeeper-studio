@@ -75,6 +75,19 @@ const FIRESTORE_OPERATORS = [
   { label: 'not-in',              type: 'keyword', info: 'Value not in array'          },
   { label: 'array-contains',      type: 'keyword', info: 'Array contains value'        },
   { label: 'array-contains-any',  type: 'keyword', info: 'Array contains any value'    },
+  {
+    label: 'startsWith', type: 'keyword', info: 'Starts with prefix (>= / <)',
+    apply: (view: any, _completion: any, from: number, to: number) => {
+      const textBefore = view.state.sliceDoc(0, from);
+      const fieldMatch = textBefore.match(/\.where\(\s*['"]([\w.-]+)['"]\s*,\s*$/);
+      const field = fieldMatch ? fieldMatch[1] : 'field';
+      const template = `>=', '').where('${field}', '<', '\\uf8ff`;
+      view.dispatch({
+        changes: { from, to, insert: template },
+        selection: { anchor: from + 7 },
+      });
+    },
+  },
 ];
 
 const FIRESTORE_TOP_LEVEL = [
@@ -157,7 +170,12 @@ async function completionSource(
     const prefix = whereOpMatch[1];
     return {
       from: pos - prefix.length,
-      options: filterByPrefix(FIRESTORE_OPERATORS, prefix),
+      options: filterByPrefix(FIRESTORE_OPERATORS, prefix).map((op: any) => ({
+        label: op.label,
+        type: op.type,
+        detail: op.info,
+        ...(op.apply ? { apply: op.apply } : {}),
+      })),
     };
   }
 
