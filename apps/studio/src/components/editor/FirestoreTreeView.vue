@@ -45,7 +45,7 @@
         class="tree-list"
         :data-key="'id'"
         :data-sources="displayNodes"
-        :data-component="() => TreeNode"
+        :data-component="TreeNode"
         :estimate-size="28"
         :keeps="30"
         :extra-props="extraProps"
