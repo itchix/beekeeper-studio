@@ -449,8 +449,9 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
     if (inequalityField) {
       // Firestore requires the first orderBy to match inequality filter field.
-      // When startsWith (or >, <, etc.) is active, order by that field exclusively.
+      // Add __name__ as secondary tiebreaker for stable pagination.
       query = query.orderBy(inequalityField, 'asc');
+      query = query.orderBy('__name__', 'asc');
     } else if (orderBy && orderBy.length > 0) {
       for (const order of orderBy) {
         const dir =
@@ -462,14 +463,16 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
 
     // Cursor pagination: use startAfter with the orderBy field value.
-    // When inequality filters are active, Firestore requires the cursor to
-    // align with the orderBy field — using doc snapshots is unreliable.
+    // With multiple orderBy clauses (inequality field + __name__ tiebreaker),
+    // use doc snapshots; with single orderBy, use value-based cursors.
     if (offset != null && offset !== 0 && typeof offset === 'string') {
       try {
         const cursorData = JSON.parse(offset);
-        if (cursorData.__cursor__ !== undefined) {
+        if (cursorData.__cursor__ !== undefined && !inequalityField) {
+          // Single orderBy — value-based cursor is reliable
           query = query.startAfter(cursorData.__cursor__);
         } else if (cursorData.__name__) {
+          // Multiple orderBy or fallback — use doc snapshot
           const cursorDoc = this.firestoreClient
             .collection(table)
             .doc(cursorData.__name__);
