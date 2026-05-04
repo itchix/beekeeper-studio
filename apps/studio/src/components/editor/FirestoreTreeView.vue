@@ -237,7 +237,7 @@ export default Vue.extend({
       const children: FirestoreTreeNode[] = []
       for (const key of Object.keys(docData)) {
         if (key === '__name__') continue
-        children.push(this.makeFieldNode(docNodeId, docId, key, docData[key], typeof docData[key]))
+        children.push(this.makeFieldNode(docNodeId, docId, key, docData[key], typeof docData[key], collectionName))
       }
       return {
         id: docNodeId,

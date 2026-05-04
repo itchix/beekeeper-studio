@@ -1280,9 +1280,16 @@ import { KeybindingPath } from '@/common/bksConfig/BksConfigProvider'
         }
       },
       stopEditing() {
+        // If in tree view, ResultTable ref is not available
+        if (this.viewMode === 'tree') return
         this.editingResult = false;
       },
       async editResults() {
+        // Switch to grid view so ResultTable ref is available
+        if (this.viewMode === 'tree') {
+          this.viewMode = 'grid'
+          await this.$nextTick()
+        }
         if (this.isCommunity) {
           this.$root.$emit(AppEvent.upgradeModal, "Upgrade required to edit query result data")
           return;
@@ -1313,6 +1320,7 @@ import { KeybindingPath } from '@/common/bksConfig/BksConfigProvider'
         wait(800).then(() => this.$tour.start("startedEditingResult"));
       },
       async saveChanges() {
+        if (this.viewMode === 'tree') return
         // This covers the instance where someone runs a query, toggles manual commit on, and then makes edits and tries to save them. This ensures it will then be inside a transaction
         if (this.canManageTransactions && this.isManualCommit && !this.hasActiveTransaction) {
           await this.manualBegin();
@@ -1321,23 +1329,29 @@ import { KeybindingPath } from '@/common/bksConfig/BksConfigProvider'
         await this.$refs.table.saveChanges();
       },
       copyToSql() {
+        if (this.viewMode === 'tree') return
         this.$refs.table.copyToSql();
       },
       discardChanges() {
+        if (this.viewMode === 'tree') return
         this.$refs.table.discardChanges();
       },
       download(format) {
+        if (this.viewMode === 'tree') return
         this.$refs.table.download(format)
       },
       clipboard() {
+        if (this.viewMode === 'tree') return
         this.$refs.table.clipboard()
       },
       clipboardJson() {
+        if (this.viewMode === 'tree') return
         // eslint-disable-next-line
         // @ts-ignore
         const data = this.$refs.table.clipboard('json')
       },
       clipboardMarkdown() {
+        if (this.viewMode === 'tree') return
         // eslint-disable-next-line
         // @ts-ignore
         const data = this.$refs.table.clipboard('md')
