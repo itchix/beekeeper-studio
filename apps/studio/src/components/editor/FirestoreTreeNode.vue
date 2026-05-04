@@ -4,15 +4,13 @@
     :class="{
       'is-expanded': source.expanded,
       'is-editing': editing,
-      'is-saving': saving,
       'is-collection': source.type === 'collection',
       'is-document': source.type === 'document',
       'is-field': source.type === 'field',
-      'is-subcollection-list': source.type === 'subcollection-list',
     }"
     :style="{ paddingLeft: source.level * 20 + 8 + 'px' }"
     role="treeitem"
-    :aria-expanded="source.children ? String(source.expanded) : undefined"
+    :aria-expanded="source.children && source.children.length ? String(source.expanded) : undefined"
     :aria-level="source.level + 1"
   >
     <!-- Chevron -->
@@ -52,6 +50,7 @@
     <span v-if="editing" class="edit-wrap">
       <input
         v-if="editInputType === 'text'"
+        :key="'text-input'"
         ref="editInput"
         v-model="editValue"
         type="text"
@@ -62,6 +61,7 @@
       />
       <input
         v-else-if="editInputType === 'number'"
+        :key="'number-input'"
         ref="editInput"
         v-model.number="editValue"
         type="number"
@@ -72,10 +72,13 @@
       />
       <select
         v-else-if="editInputType === 'boolean'"
+        :key="'boolean-select'"
         ref="editInput"
         v-model="editValue"
         class="edit-input"
         @change="saveEdit"
+        @keydown.enter="saveEdit"
+        @blur="saveEdit"
         @keydown.escape="cancelEdit"
       >
         <option :value="true">true</option>
@@ -126,7 +129,7 @@ export default Vue.extend({
     return {
       editing: false,
       saving: false,
-      editValue: '' as unknown,
+      editValue: undefined as unknown,
     }
   },
   computed: {
@@ -169,7 +172,8 @@ export default Vue.extend({
 </script>
 
 <style lang="scss" scoped>
-@import '../../assets/styles/app/variables';
+@use 'sass:color';
+@import '../../assets/styles/app/_variables';
 
 .firestore-tree-node {
   display: flex;
@@ -182,7 +186,7 @@ export default Vue.extend({
   font-size: 13px;
 
   &:hover {
-    background: var(--theme-bg-hover, rgba(128, 128, 128, 0.12));
+    background: color.adjust($theme-bg, $lightness: 8%);
   }
 
   &.is-expanded .chevron .material-icons {
@@ -202,7 +206,7 @@ export default Vue.extend({
   .material-icons {
     font-size: 16px;
     transition: transform 0.15s;
-    color: var(--theme-text-secondary, #999);
+    color: $text-light;
   }
 
   &.invisible {
@@ -230,18 +234,18 @@ export default Vue.extend({
 
   .material-icons {
     font-size: 16px;
-    color: var(--theme-text-secondary, #999);
+    color: $text-light;
   }
 
   .is-collection & .material-icons {
-    color: var(--theme-primary, #f5a623);
+    color: $theme-primary;
   }
 }
 
 .label {
   flex-shrink: 0;
   margin-right: 8px;
-  color: var(--theme-text, #ccc);
+  color: $text-dark;
   overflow: hidden;
   text-overflow: ellipsis;
 
@@ -250,7 +254,7 @@ export default Vue.extend({
   }
 
   .is-document & {
-    font-family: var(--font-mono, monospace);
+    font-family: monospace;
     font-size: 12px;
   }
 }
@@ -266,22 +270,22 @@ export default Vue.extend({
   font-size: 10px;
   padding: 1px 4px;
   border-radius: 3px;
-  background: var(--theme-bg-input, rgba(64, 64, 64, 0.3));
-  color: var(--theme-text-secondary, #888);
+  background: $theme-bg;
+  color: $text-light;
   flex-shrink: 0;
 }
 
 .value {
-  font-family: var(--font-mono, monospace);
+  font-family: monospace;
   font-size: 12px;
-  color: var(--theme-text, #ccc);
+  color: $text-dark;
   overflow: hidden;
   text-overflow: ellipsis;
 
   &.editable {
     cursor: pointer;
     &:hover {
-      color: var(--theme-primary, #f5a623);
+      color: $theme-primary;
     }
   }
 }
@@ -291,13 +295,13 @@ export default Vue.extend({
 }
 
 .edit-input {
-  font-family: var(--font-mono, monospace);
+  font-family: monospace;
   font-size: 12px;
   padding: 1px 4px;
-  border: 1px solid var(--theme-primary, #f5a623);
+  border: 1px solid $theme-primary;
   border-radius: 3px;
-  background: var(--theme-bg-input, #1e1e1e);
-  color: var(--theme-text, #ccc);
+  background: $theme-bg;
+  color: $text-dark;
   outline: none;
   min-width: 80px;
   max-width: 300px;
@@ -308,7 +312,7 @@ export default Vue.extend({
   .material-icons {
     font-size: 14px;
     animation: spin 1s linear infinite;
-    color: var(--theme-text-secondary, #999);
+    color: $text-light;
   }
 }
 
@@ -317,8 +321,8 @@ export default Vue.extend({
   font-size: 11px;
   padding: 0 5px;
   border-radius: 8px;
-  background: var(--theme-bg-input, rgba(64, 64, 64, 0.3));
-  color: var(--theme-text-secondary, #888);
+  background: $theme-bg;
+  color: $text-light;
 }
 
 @keyframes spin {
