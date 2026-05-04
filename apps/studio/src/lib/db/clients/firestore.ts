@@ -407,11 +407,15 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     _selects?: string[]
   ): Promise<TableResult> {
     let query: any = this.firestoreClient.collection(table);
+    let inequalityField: string | null = null;
 
     if (typeof filters === 'string' && filters.trim()) {
       const parsed = this.parseRawFilter(filters.trim());
       if (parsed) {
         query = query.where(parsed.field, parsed.op, parsed.value);
+        if (['<', '<=', '>', '>=', '!='].includes(parsed.op)) {
+          inequalityField = parsed.field;
+        }
       }
     } else if (Array.isArray(filters)) {
       for (const filter of filters) {
@@ -421,6 +425,9 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
             const parsed = this.parseRawFilter(rawValue.trim());
             if (parsed) {
               query = query.where(parsed.field, parsed.op, parsed.value);
+              if (['<', '<=', '>', '>=', '!='].includes(parsed.op)) {
+                inequalityField = parsed.field;
+              }
             }
           }
           continue;
@@ -430,8 +437,12 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         if (op === 'startsWith') {
           query = query.where(field, '>=', value);
           query = query.where(field, '<', value + '\uf8ff');
+          inequalityField = field;
         } else {
           query = query.where(field, op, value);
+          if (['<', '<=', '>', '>=', '!='].includes(op)) {
+            inequalityField = field;
+          }
         }
       }
     }
@@ -443,7 +454,10 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
         query = query.orderBy(order.field, dir);
       }
     } else {
-      query = query.orderBy('__name__', 'asc');
+      // Firestore requires inequality filter field to be first in orderBy.
+      // Default to the inequality field if present, otherwise __name__.
+      const defaultOrderField = inequalityField || '__name__';
+      query = query.orderBy(defaultOrderField, 'asc');
     }
 
     // Cursor pagination: use startAfter with last doc ID instead of expensive offset()

@@ -1,22 +1,30 @@
 import { ColumnType, DialectData } from "./models";
 
 const types = [
-  'string', 'number', 'boolean', 'null', 'map', 'array',
-  'timestamp', 'geopoint', 'reference', 'bytes'
-]
+  "string",
+  "number",
+  "boolean",
+  "null",
+  "map",
+  "array",
+  "timestamp",
+  "geopoint",
+  "reference",
+  "bytes",
+];
 
 export const FirestoreData: DialectData = {
   sqlLabel: "code",
   columnTypes: types.map((t) => new ColumnType(t)),
   usesOffsetPagination: false,
-  queryDialectOverride: 'generic',
-  textEditorMode: 'text/x-javascript',
+  queryDialectOverride: "generic",
+  textEditorMode: "text/x-javascript",
   rawFilterPlaceholder: "field = value  (e.g. status = active, age > 30)",
   disabledFeatures: {
     manualCommit: true,
     resultEditing: false,
     readOnlyPrimaryKeys: true,
-    builderFilters: true,
+    builderFilters: false,
     shell: true,
     informationSchema: {
       extra: true,
@@ -64,5 +72,5 @@ export const FirestoreData: DialectData = {
     sqlCreate: true,
     compositeKeys: true,
     schemaValidation: true,
-  }
-}
+  },
+};
