@@ -1,0 +1,572 @@
+<template>
+  <div class="firestore-tree-view" role="tree" @keydown="handleKeydown" tabindex="0">
+    <!-- Toolbar -->
+    <div class="tree-toolbar">
+      <input
+        v-if="mode === 'explorer'"
+        v-model="searchText"
+        type="text"
+        class="search-input"
+        placeholder="Filter collections..."
+        @input="onSearchInput"
+      />
+      <span v-else class="tree-title">
+        {{ mode === 'results' ? `Results (${nodeCount} documents)` : '' }}
+      </span>
+      <div class="tree-toolbar-actions">
+        <button v-if="mode === 'explorer'" class="btn btn-flat btn-icon" title="Refresh" @click="refresh">
+          <i class="material-icons">refresh</i>
+        </button>
+        <button class="btn btn-flat btn-icon" title="Collapse all" @click="collapseAll">
+          <i class="material-icons">unfold_less</i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tree body -->
+    <div v-if="loading" class="tree-loading">
+      <div v-for="n in 4" :key="n" class="skeleton-row">
+        <span class="skeleton-bar" :style="{ width: 40 + (n * 30) + 'px' }" />
+      </div>
+    </div>
+
+    <div v-else-if="error" class="tree-error">
+      <i class="material-icons">error_outline</i>
+      <span>{{ error }}</span>
+      <button class="btn btn-flat" @click="refresh">Retry</button>
+    </div>
+
+    <div v-else-if="displayNodes.length === 0" class="tree-empty">
+      <span>{{ mode === 'explorer' ? 'No collections found' : 'No results' }}</span>
+    </div>
+
+    <template v-else>
+      <virtual-list
+        ref="vList"
+        class="tree-list"
+        :data-key="'id'"
+        :data-sources="displayNodes"
+        :data-component="() => TreeNode"
+        :estimate-size="28"
+        :keeps="30"
+        :extra-props="extraProps"
+      />
+      <div v-if="hasMore" class="tree-load-more">
+        <button class="btn btn-flat btn-small" :disabled="loadingMore" @click="loadMoreDocuments">
+          <i v-if="loadingMore" class="material-icons spinner">sync</i>
+          <span>Load more...</span>
+        </button>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script lang="ts">
+import Vue from 'vue'
+import VirtualList from 'vue-virtual-scroll-list'
+import FirestoreTreeNodeComponent from './FirestoreTreeNode.vue'
+
+interface FirestoreTreeNode {
+  id: string
+  type: 'collection' | 'document' | 'field' | 'subcollection-list'
+  label: string
+  collectionName?: string
+  docId?: string
+  value?: unknown
+  displayValue: string
+  fieldType?: string
+  children?: FirestoreTreeNode[]
+  childCount?: number
+  expanded: boolean
+  loading: boolean
+  level: number
+  isEditable: boolean
+}
+
+const PAGE_SIZE = 50
+
+export default Vue.extend({
+  name: 'FirestoreTreeView',
+  components: { VirtualList },
+  props: {
+    connection: { type: Object, required: true },
+    rows: { type: Array, default: () => [] },
+    fields: { type: Array, default: () => [] },
+    mode: { type: String as () => 'explorer' | 'results', default: 'results' },
+  },
+  data() {
+    return {
+      TreeNode: FirestoreTreeNodeComponent,
+      nodes: [] as FirestoreTreeNode[],
+      nodeStates: {} as Record<string, { expanded: boolean }>,
+      nodeChildren: {} as Record<string, FirestoreTreeNode[]>,
+      loading: false,
+      error: '',
+      searchText: '',
+      focusedIndex: 0,
+      pageCursors: {} as Record<string, string | null>,
+      loadingMore: false,
+    }
+  },
+  computed: {
+    extraProps() {
+      return {
+        onExpand: this.handleExpand,
+        onEdit: this.handleEdit,
+      }
+    },
+    displayNodes(): FirestoreTreeNode[] {
+      const result: FirestoreTreeNode[] = []
+      for (const node of this.nodes) {
+        if (!this.searchText || node.label.toLowerCase().includes(this.searchText.toLowerCase())) {
+          if (this.isNodeVisible(node)) {
+            result.push(node)
+          }
+        }
+      }
+      return result
+    },
+    nodeCount(): number {
+      return this.nodes.filter((n) => n.type === 'document').length
+    },
+    hasMore(): boolean {
+      for (const node of this.nodes) {
+        if (node.type === 'collection' && node.expanded && this.pageCursors[node.collectionName!]) {
+          return true
+        }
+      }
+      return false
+    },
+  },
+  watch: {
+    rows: {
+      handler() { this.rebuild() },
+      immediate: true,
+    },
+    mode: {
+      handler() { this.rebuild() },
+    },
+  },
+  methods: {
+    async rebuild() {
+      this.nodes = []
+      this.nodeStates = {}
+      this.nodeChildren = {}
+      this.error = ''
+      this.searchText = ''
+
+      if (this.mode === 'results' && this.rows.length > 0) {
+        await this.buildFromResults()
+      } else if (this.mode === 'explorer') {
+        await this.buildFromCollections()
+      }
+    },
+
+    async buildFromCollections() {
+      this.loading = true
+      try {
+        const tables = await this.connection.listTables()
+        const collections = tables.filter((t: any) => t.entityType === 'table')
+        this.nodes = collections.map((c: any) => this.makeCollectionNode(c.name))
+      } catch (err: any) {
+        this.error = err.message || 'Failed to list collections'
+      } finally {
+        this.loading = false
+      }
+    },
+
+    buildFromResults() {
+      const docNodes = (this.rows as any[]).map((row: any, idx: number) => {
+        const docId = row.__name__ || row.id || `doc-${idx}`
+        const children: FirestoreTreeNode[] = []
+        for (const field of (this.fields as any[])) {
+          if (field.name === '__name__') continue
+          const rawValue = row[field.name]
+          children.push(this.makeFieldNode(docId, field.name, rawValue, field.dataType))
+        }
+
+        return {
+          id: `doc:${docId}`,
+          type: 'document' as const,
+          label: typeof docId === 'string' ? docId : String(docId),
+          displayValue: '',
+          children,
+          childCount: children.length,
+          expanded: false,
+          loading: false,
+          level: 0,
+          isEditable: false,
+        }
+      })
+
+      this.nodes = docNodes
+    },
+
+    makeCollectionNode(name: string): FirestoreTreeNode {
+      return {
+        id: `col:${name}`,
+        type: 'collection',
+        label: name,
+        collectionName: name,
+        displayValue: '',
+        expanded: false,
+        loading: false,
+        level: 0,
+        isEditable: false,
+      }
+    },
+
+    makeDocumentNode(collectionName: string, docData: any): FirestoreTreeNode {
+      const docId = docData.__name__ || 'unknown'
+      const children: FirestoreTreeNode[] = []
+      for (const key of Object.keys(docData)) {
+        if (key === '__name__') continue
+        children.push(this.makeFieldNode(docId, key, docData[key], typeof docData[key]))
+      }
+      return {
+        id: `doc:${collectionName}/${docId}`,
+        type: 'document',
+        label: typeof docId === 'string' ? docId : String(docId),
+        collectionName,
+        docId: typeof docId === 'string' ? docId : String(docId),
+        displayValue: '',
+        children,
+        childCount: children.length,
+        expanded: false,
+        loading: false,
+        level: 1,
+        isEditable: false,
+      }
+    },
+
+    makeFieldNode(
+      docId: string,
+      fieldName: string,
+      rawValue: unknown,
+      fieldType?: string
+    ): FirestoreTreeNode {
+      const normalizedType = fieldType?.toLowerCase() || ''
+      const isEditable = ['string', 'number', 'boolean', 'null', 'timestamp', 'float', 'integer', 'int64'].includes(
+        normalizedType
+      ) || !normalizedType
+
+      let displayValue = ''
+      if (rawValue === null || rawValue === undefined) {
+        displayValue = 'null'
+      } else if (rawValue instanceof Date) {
+        displayValue = rawValue.toISOString()
+      } else if (typeof rawValue === 'object') {
+        try {
+          const s = JSON.stringify(rawValue)
+          displayValue = s.length > 80 ? s.slice(0, 80) + '\u2026' : s
+        } catch {
+          displayValue = '[Object]'
+        }
+      } else {
+        displayValue = String(rawValue)
+      }
+
+      return {
+        id: `field:${docId}.${fieldName}`,
+        type: 'field',
+        label: fieldName,
+        docId,
+        value: rawValue,
+        displayValue,
+        fieldType: normalizedType || 'string',
+        level: 2,
+        isEditable,
+        expanded: false,
+        loading: false,
+      }
+    },
+
+    async handleExpand(_event: Event, node: FirestoreTreeNode) {
+      if (node.type === 'field') return
+
+      node.expanded = !node.expanded
+      this.updateNodeState(node)
+
+      if (node.expanded && node.type === 'collection' && (!node.children || node.children.length === 0)) {
+        await this.loadDocuments(node)
+      }
+
+      this.$forceUpdate()
+    },
+
+    async loadDocuments(collectionNode: FirestoreTreeNode) {
+      const name = collectionNode.collectionName!
+      collectionNode.loading = true
+      this.$forceUpdate()
+
+      try {
+        const result = await this.connection.selectTop(name, null, PAGE_SIZE, [], [])
+        const rows = result.result || []
+        const docNodes = rows.map((row: any) => this.makeDocumentNode(name, row))
+        collectionNode.children = docNodes
+        collectionNode.childCount = docNodes.length
+        this.addChildNodes(collectionNode, docNodes)
+        this.pageCursors[name] = result.pageState || null
+      } catch (err: any) {
+        this.error = err.message || `Failed to load ${name}`
+      } finally {
+        collectionNode.loading = false
+        this.$forceUpdate()
+      }
+    },
+
+    async loadMoreDocuments() {
+      const collectionNode = this.nodes.find(
+        (n) => n.type === 'collection' && n.expanded && this.pageCursors[n.collectionName!]
+      )
+      if (!collectionNode) return
+
+      const name = collectionNode.collectionName!
+      const cursor = this.pageCursors[name]!
+      this.loadingMore = true
+
+      try {
+        const result = await this.connection.selectTop(name, cursor, PAGE_SIZE, [], [])
+        const rows = result.result || []
+        const newDocs = rows.map((row: any) => this.makeDocumentNode(name, row))
+        const existing = collectionNode.children || []
+        collectionNode.children = [...existing, ...newDocs]
+        collectionNode.childCount = collectionNode.children.length
+        this.addChildNodes(collectionNode, newDocs)
+        this.pageCursors[name] = result.pageState || null
+      } catch (err: any) {
+        this.error = err.message || 'Failed to load more'
+      } finally {
+        this.loadingMore = false
+        this.$forceUpdate()
+      }
+    },
+
+    collapseAll() {
+      for (const node of this.nodes) {
+        node.expanded = false
+        this.updateNodeState(node)
+        if (node.children) {
+          for (const child of node.children) {
+            child.expanded = false
+          }
+        }
+      }
+      this.$forceUpdate()
+    },
+
+    handleEdit(node: FirestoreTreeNode, newValue: unknown, done: (success: boolean) => void) {
+      if (!node.docId || !node.collectionName) {
+        done(false)
+        return
+      }
+
+      const changes = {
+        updates: [{
+          table: node.collectionName,
+          column: node.label,
+          value: newValue,
+          primaryKeys: [{ column: '__name__', value: node.docId }],
+        }],
+        inserts: [],
+        deletes: [],
+      }
+
+      this.connection
+        .applyChanges(changes)
+        .then(() => {
+          node.value = newValue
+          node.displayValue =
+            newValue === null || newValue === undefined
+              ? 'null'
+              : typeof newValue === 'object'
+                ? JSON.stringify(newValue)
+                : String(newValue)
+          done(true)
+        })
+        .catch(() => {
+          done(false)
+        })
+    },
+
+    addChildNodes(parent: FirestoreTreeNode, children: FirestoreTreeNode[]) {
+      const parentIdx = this.nodes.indexOf(parent)
+      if (parentIdx >= 0) {
+        this.nodes.splice(parentIdx + 1, 0, ...children)
+      }
+    },
+
+    isNodeVisible(node: FirestoreTreeNode): boolean {
+      if (node.level === 0) return true
+
+      for (const potentialParent of this.nodes) {
+        if (
+          (potentialParent.type === 'collection' || potentialParent.type === 'document') &&
+          node.id.startsWith(potentialParent.id + '/') &&
+          !potentialParent.expanded
+        ) {
+          return false
+        }
+      }
+      return true
+    },
+
+    updateNodeState(node: FirestoreTreeNode) {
+      if (!this.nodeStates[node.id]) {
+        this.$set(this.nodeStates, node.id, { expanded: node.expanded })
+      } else {
+        this.nodeStates[node.id].expanded = node.expanded
+      }
+    },
+
+    onSearchInput() {
+      this.$forceUpdate()
+    },
+
+    handleKeydown(e: KeyboardEvent) {
+      const idx = this.focusedIndex
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        this.focusedIndex = Math.min(idx + 1, this.displayNodes.length - 1)
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        this.focusedIndex = Math.max(idx - 1, 0)
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        const node = this.displayNodes[idx]
+        if (node && !node.expanded && node.type !== 'field') {
+          this.handleExpand(e as any, node)
+        }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        const node = this.displayNodes[idx]
+        if (node && node.expanded) {
+          this.handleExpand(e as any, node)
+        }
+      }
+    },
+
+    async refresh() {
+      await this.rebuild()
+    },
+  },
+})
+</script>
+
+<style lang="scss" scoped>
+@use 'sass:color';
+@import '../../assets/styles/app/_variables';
+
+.firestore-tree-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $theme-bg;
+  border: 1px solid $border-color;
+  outline: none;
+
+  &:focus {
+    border-color: $theme-primary;
+  }
+}
+
+.tree-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid $border-color;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  padding: 2px 8px;
+  border: 1px solid $border-color;
+  border-radius: 3px;
+  background: $theme-bg;
+  color: $text-dark;
+  font-size: 12px;
+  outline: none;
+
+  &:focus {
+    border-color: $theme-primary;
+  }
+}
+
+.tree-title {
+  flex: 1;
+  font-size: 12px;
+  color: $text-light;
+  padding: 2px 0;
+}
+
+.tree-toolbar-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.tree-list {
+  flex: 1;
+  overflow: auto;
+}
+
+.tree-loading {
+  padding: 12px 8px;
+}
+
+.skeleton-row {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+}
+
+.skeleton-bar {
+  height: 12px;
+  border-radius: 4px;
+  background: color.adjust($theme-bg, $lightness: 8%);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.tree-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: $brand-danger;
+  font-size: 13px;
+}
+
+.tree-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: $text-light;
+  font-size: 13px;
+}
+
+.tree-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+  border-top: 1px solid $border-color;
+  flex-shrink: 0;
+
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>
