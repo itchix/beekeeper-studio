@@ -461,16 +461,22 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       query = query.orderBy('__name__', 'asc');
     }
 
-    // Cursor pagination: use startAfter with last doc ID instead of expensive offset()
+    // Cursor pagination: use startAfter with the orderBy field value.
+    // When inequality filters are active, Firestore requires the cursor to
+    // align with the orderBy field — using doc snapshots is unreliable.
     if (offset != null && offset !== 0 && typeof offset === 'string') {
       try {
         const cursorData = JSON.parse(offset);
-        const cursorDoc = this.firestoreClient
-          .collection(table)
-          .doc(cursorData.__name__);
-        const cursorSnapshot = await cursorDoc.get();
-        if (cursorSnapshot.exists) {
-          query = query.startAfter(cursorSnapshot);
+        if (cursorData.__cursor__ !== undefined) {
+          query = query.startAfter(cursorData.__cursor__);
+        } else if (cursorData.__name__) {
+          const cursorDoc = this.firestoreClient
+            .collection(table)
+            .doc(cursorData.__name__);
+          const cursorSnapshot = await cursorDoc.get();
+          if (cursorSnapshot.exists) {
+            query = query.startAfter(cursorSnapshot);
+          }
         }
       } catch {
         const numericOffset =
@@ -501,7 +507,14 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     let pageState: string | null = null;
     if (docs.length > 0) {
       const lastDoc = docs[docs.length - 1];
-      pageState = JSON.stringify({ __name__: lastDoc.id });
+      const cursorData: any = { __name__: lastDoc.id };
+      // When there's an inequality filter, store the orderBy field value
+      // so pagination uses the correct field for startAfter.
+      if (inequalityField) {
+        cursorData.__cursor__ = lastDoc.data()[inequalityField];
+        cursorData.__field__ = inequalityField;
+      }
+      pageState = JSON.stringify(cursorData);
     }
 
     return {
