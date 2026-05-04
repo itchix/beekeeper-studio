@@ -42,6 +42,7 @@
       <span
         class="value"
         :class="{ editable: source.isEditable }"
+        @click.stop="copyValue"
         @dblclick.stop="source.isEditable && startEdit()"
       >{{ source.displayValue }}</span>
     </span>
@@ -100,6 +101,7 @@
 
 <script lang="ts">
 import Vue from 'vue'
+import Noty from 'noty'
 
 interface FirestoreTreeNode {
   id: string
@@ -166,6 +168,32 @@ export default Vue.extend({
     cancelEdit() {
       this.editing = false
       this.editValue = this.source.value
+    },
+    copyValue() {
+      const value = this.source.value
+      let text = ''
+      if (value === null || value === undefined) {
+        text = 'null'
+      } else if (typeof value === 'string') {
+        text = value
+      } else if (typeof value === 'number' || typeof value === 'boolean') {
+        text = String(value)
+      } else if (value instanceof Date) {
+        text = value.toISOString()
+      } else {
+        try {
+          text = JSON.stringify(value)
+        } catch {
+          text = '[Object]'
+        }
+      }
+      ;(this as any).$native.clipboard.writeText(text)
+      new Noty({
+        text: 'Copied!',
+        type: 'success',
+        timeout: 1500,
+        layout: 'bottomRight',
+      }).show()
     },
   },
 })
