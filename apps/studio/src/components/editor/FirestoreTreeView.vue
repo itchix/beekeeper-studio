@@ -68,6 +68,7 @@ import FirestoreTreeNodeComponent from './FirestoreTreeNode.vue'
 
 interface FirestoreTreeNode {
   id: string
+  parentId?: string
   type: 'collection' | 'document' | 'field' | 'subcollection-list'
   label: string
   collectionName?: string
@@ -178,15 +179,17 @@ export default Vue.extend({
     buildFromResults() {
       const docNodes = (this.rows as any[]).map((row: any, idx: number) => {
         const docId = row.__name__ || row.id || `doc-${idx}`
+        const docNodeId = `doc:${docId}`
         const children: FirestoreTreeNode[] = []
         for (const field of (this.fields as any[])) {
           if (field.name === '__name__') continue
           const rawValue = row[field.name]
-          children.push(this.makeFieldNode(docId, field.name, rawValue, field.dataType))
+          children.push(this.makeFieldNode(docNodeId, docId, field.name, rawValue, field.dataType))
         }
 
         return {
-          id: `doc:${docId}`,
+          id: docNodeId,
+          parentId: undefined,
           type: 'document' as const,
           label: typeof docId === 'string' ? docId : String(docId),
           displayValue: '',
@@ -205,6 +208,7 @@ export default Vue.extend({
     makeCollectionNode(name: string): FirestoreTreeNode {
       return {
         id: `col:${name}`,
+        parentId: undefined,
         type: 'collection',
         label: name,
         collectionName: name,
@@ -218,13 +222,15 @@ export default Vue.extend({
 
     makeDocumentNode(collectionName: string, docData: any): FirestoreTreeNode {
       const docId = docData.__name__ || 'unknown'
+      const docNodeId = `doc:${collectionName}/${docId}`
       const children: FirestoreTreeNode[] = []
       for (const key of Object.keys(docData)) {
         if (key === '__name__') continue
-        children.push(this.makeFieldNode(docId, key, docData[key], typeof docData[key]))
+        children.push(this.makeFieldNode(docNodeId, docId, key, docData[key], typeof docData[key]))
       }
       return {
-        id: `doc:${collectionName}/${docId}`,
+        id: docNodeId,
+        parentId: `col:${collectionName}`,
         type: 'document',
         label: typeof docId === 'string' ? docId : String(docId),
         collectionName,
@@ -240,6 +246,7 @@ export default Vue.extend({
     },
 
     makeFieldNode(
+      parentId: string,
       docId: string,
       fieldName: string,
       rawValue: unknown,
@@ -268,6 +275,7 @@ export default Vue.extend({
 
       return {
         id: `field:${docId}.${fieldName}`,
+        parentId,
         type: 'field',
         label: fieldName,
         docId,
@@ -316,30 +324,36 @@ export default Vue.extend({
     },
 
     async loadMoreDocuments() {
-      const collectionNode = this.nodes.find(
+      const collectionsToLoad = this.nodes.filter(
         (n) => n.type === 'collection' && n.expanded && this.pageCursors[n.collectionName!]
       )
-      if (!collectionNode) return
+      if (collectionsToLoad.length === 0) return
 
-      const name = collectionNode.collectionName!
-      const cursor = this.pageCursors[name]!
       this.loadingMore = true
 
-      try {
-        const result = await this.connection.selectTop(name, cursor, PAGE_SIZE, [], [])
-        const rows = result.result || []
-        const newDocs = rows.map((row: any) => this.makeDocumentNode(name, row))
-        const existing = collectionNode.children || []
-        collectionNode.children = [...existing, ...newDocs]
-        collectionNode.childCount = collectionNode.children.length
-        this.addChildNodes(collectionNode, newDocs)
-        this.pageCursors[name] = result.pageState || null
-      } catch (err: any) {
-        this.error = err.message || 'Failed to load more'
-      } finally {
-        this.loadingMore = false
-        this.$forceUpdate()
+      for (const collectionNode of collectionsToLoad) {
+        const name = collectionNode.collectionName!
+        const cursor = this.pageCursors[name]!
+        try {
+          const result = await this.connection.selectTop(name, cursor, PAGE_SIZE, [], [])
+          const rows = result.result || []
+          if (rows.length === 0) {
+            this.pageCursors[name] = null
+            continue
+          }
+          const newDocs = rows.map((row: any) => this.makeDocumentNode(name, row))
+          const existing = collectionNode.children || []
+          collectionNode.children = [...existing, ...newDocs]
+          collectionNode.childCount = collectionNode.children.length
+          this.addChildNodes(collectionNode, newDocs)
+          this.pageCursors[name] = result.pageState || null
+        } catch (err: any) {
+          this.error = err.message || 'Failed to load more'
+        }
       }
+
+      this.loadingMore = false
+      this.$forceUpdate()
     },
 
     collapseAll() {
@@ -390,24 +404,26 @@ export default Vue.extend({
     },
 
     addChildNodes(parent: FirestoreTreeNode, children: FirestoreTreeNode[]) {
-      const parentIdx = this.nodes.indexOf(parent)
-      if (parentIdx >= 0) {
-        this.nodes.splice(parentIdx + 1, 0, ...children)
-      }
+      const lastChildIdx = this.nodes.reduce((lastIdx, n, i) => {
+        return n.parentId === parent.id ? i : lastIdx
+      }, -1)
+
+      const insertIdx = lastChildIdx >= 0 ? lastChildIdx + 1 : this.nodes.indexOf(parent) + 1
+      this.nodes.splice(insertIdx, 0, ...children)
     },
 
     isNodeVisible(node: FirestoreTreeNode): boolean {
       if (node.level === 0) return true
+      if (!node.parentId) return true
 
-      for (const potentialParent of this.nodes) {
-        if (
-          (potentialParent.type === 'collection' || potentialParent.type === 'document') &&
-          node.id.startsWith(potentialParent.id + '/') &&
-          !potentialParent.expanded
-        ) {
-          return false
-        }
+      const parent = this.nodes.find(n => n.id === node.parentId)
+      if (!parent || !parent.expanded) return false
+
+      if (node.level >= 2 && parent.parentId) {
+        const grandparent = this.nodes.find(n => n.id === parent.parentId)
+        if (grandparent && !grandparent.expanded) return false
       }
+
       return true
     },
 
