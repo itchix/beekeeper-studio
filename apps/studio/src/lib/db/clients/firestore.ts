@@ -447,17 +447,18 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
     }
 
-    if (orderBy && orderBy.length > 0) {
+    if (inequalityField) {
+      // Firestore requires the first orderBy to match inequality filter field.
+      // When startsWith (or >, <, etc.) is active, order by that field exclusively.
+      query = query.orderBy(inequalityField, 'asc');
+    } else if (orderBy && orderBy.length > 0) {
       for (const order of orderBy) {
         const dir =
           (order.dir || 'ASC').toUpperCase() === 'DESC' ? 'desc' : 'asc';
         query = query.orderBy(order.field, dir);
       }
     } else {
-      // Firestore requires inequality filter field to be first in orderBy.
-      // Default to the inequality field if present, otherwise __name__.
-      const defaultOrderField = inequalityField || '__name__';
-      query = query.orderBy(defaultOrderField, 'asc');
+      query = query.orderBy('__name__', 'asc');
     }
 
     // Cursor pagination: use startAfter with last doc ID instead of expensive offset()
