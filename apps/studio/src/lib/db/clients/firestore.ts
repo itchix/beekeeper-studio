@@ -463,27 +463,23 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
 
     // Cursor pagination.
-    // Inequality filters use doc snapshots (field types survive JSON round-trip).
-    // Simple queries use doc ID directly as startAfter value.
+    // Always use doc snapshots so startAfter aligns with whatever orderBy is active.
+    // A doc snapshot works for any orderBy; a bare value only works for orderBy(__name__).
     if (offset != null && offset !== 0 && typeof offset === 'string') {
       try {
         const cursorData = JSON.parse(offset);
-        if (cursorData.__cursor__ !== undefined) {
-          // Inequality filter: re-fetch the last doc to preserve field types
-          // (Timestamps, GeoPoints, etc. don't survive JSON serialization)
+        if (cursorData.__name__) {
           const cursorDoc = this.firestoreClient
             .collection(table)
             .doc(cursorData.__name__);
           const cursorSnapshot = await cursorDoc.get();
           if (cursorSnapshot.exists) {
             query = query.startAfter(cursorSnapshot);
-          } else {
-            // Doc deleted — fallback to value-based with string representation
+          } else if (cursorData.__cursor__ !== undefined) {
+            // Doc deleted — fallback to value-based with stored field value
             query = query.startAfter(cursorData.__cursor__, cursorData.__name__);
           }
-        } else if (cursorData.__name__) {
-          // No inequality filter: orderBy(__name__), doc ID is always a string
-          query = query.startAfter(cursorData.__name__);
+          // If doc deleted and no stored field value, start fresh (no offset)
         }
       } catch {
         // If cursor parsing fails, start fresh (no offset)
