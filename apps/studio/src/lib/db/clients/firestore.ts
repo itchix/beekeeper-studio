@@ -462,33 +462,25 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       query = query.orderBy('__name__', 'asc');
     }
 
-    // Cursor pagination: use startAfter with the orderBy field value.
-    // With multiple orderBy clauses (inequality field + __name__ tiebreaker),
-    // use doc snapshots; with single orderBy, use value-based cursors.
+    // Cursor pagination: use value-based startAfter matching orderBy clauses.
+    // Never re-fetch documents (avoids issues with deleted docs between pages).
     if (offset != null && offset !== 0 && typeof offset === 'string') {
       try {
         const cursorData = JSON.parse(offset);
-        if (cursorData.__cursor__ !== undefined && !inequalityField) {
-          // Single orderBy — value-based cursor is reliable
-          query = query.startAfter(cursorData.__cursor__);
+        if (cursorData.__cursor__ !== undefined) {
+          // Inequality filter active: orderBy(field).orderBy(__name__)
+          // Pass both values to startAfter for two orderBy clauses
+          query = query.startAfter(cursorData.__cursor__, cursorData.__name__);
         } else if (cursorData.__name__) {
-          // Multiple orderBy or fallback — use doc snapshot
-          const cursorDoc = this.firestoreClient
-            .collection(table)
-            .doc(cursorData.__name__);
-          const cursorSnapshot = await cursorDoc.get();
-          if (cursorSnapshot.exists) {
-            query = query.startAfter(cursorSnapshot);
-          }
+          // No inequality: orderBy(__name__) only
+          // Use doc ID directly as startAfter value
+          query = query.startAfter(cursorData.__name__);
         }
       } catch {
-        const numericOffset =
-          typeof offset === "number" ? offset : parseInt(offset, 10);
-        if (numericOffset > 0) {
-          query = query.offset(numericOffset);
-        }
+        // If cursor parsing fails, start fresh (no offset)
       }
     } else if (typeof offset === 'number' && offset > 0) {
+      // Fallback: numeric offset (for databases that don't use cursor pagination)
       query = query.offset(offset);
     }
 

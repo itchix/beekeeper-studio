@@ -1995,6 +1995,7 @@ export default Vue.extend({
         return;
       }
       this.filters = filters;
+      this.paginationStates = [null];
     },
     dataFetch(_url, _config, params) {
       // this conforms to the Tabulator API
