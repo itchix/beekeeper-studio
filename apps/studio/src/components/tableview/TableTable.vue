@@ -26,7 +26,17 @@
       >
         No Data
       </div>
+      <!-- Tree view for Firestore -->
+      <firestore-tree-view
+        v-if="isFirestore && viewMode === 'tree'"
+        :connection="connection"
+        :rows="data || []"
+        :fields="treeFields"
+        :mode="(data && data.length > 0) ? 'results' : 'explorer'"
+      />
+      <!-- Grid view (Tabulator) -->
       <div
+        v-show="!isFirestore || viewMode === 'grid'"
         class="table-view-wrapper"
         ref="tableViewWrapper"
       >
@@ -199,6 +209,26 @@
         </template>
 
         <!-- Actions -->
+        <template v-if="isFirestore">
+          <div class="btn-group view-mode-toggle">
+            <x-button
+              class="btn btn-flat btn-small"
+              :class="{ active: viewMode === 'grid' }"
+              title="Grid view"
+              @click.prevent="viewMode = 'grid'"
+            >
+              <i class="material-icons">grid_on</i>
+            </x-button>
+            <x-button
+              class="btn btn-flat btn-small"
+              :class="{ active: viewMode === 'tree' }"
+              title="Tree view"
+              @click.prevent="viewMode = 'tree'"
+            >
+              <i class="material-icons">account_tree</i>
+            </x-button>
+          </div>
+        </template>
         <x-button
           v-tooltip="`Refresh Table (${$bksConfig.keybindings.general.refresh})`"
           class="btn btn-flat"
@@ -339,13 +369,14 @@ import { getFilters, setFilters } from "@/common/transport/TransportOpenTab"
 import { ExpandablePath, parseRowDataForJsonViewer } from '@/lib/data/jsonViewer'
 import { stringToTypedArray, removeUnsortableColumnsFromSortBy } from "@/common/utils";
 import { UpdateOptions } from "@/lib/data/jsonViewer";
+import FirestoreTreeView from '../editor/FirestoreTreeView.vue'
 
 const log = rawLog.scope('TableTable')
 
 let draftFilters: TableFilter[] | string | null;
 
 export default Vue.extend({
-  components: { Statusbar, ColumnFilterModal, TableLength, RowFilterBuilder, EditorModal },
+  components: { Statusbar, ColumnFilterModal, TableLength, RowFilterBuilder, EditorModal, FirestoreTreeView },
   mixins: [data_converter, DataMutators, FkLinkMixin],
   props: ["active", 'tab', 'table'],
   data() {
@@ -395,6 +426,7 @@ export default Vue.extend({
       selectedRowPosition: -1,
       selectedRowData: {},
       expandablePaths: [],
+      viewMode: 'grid' as 'grid' | 'tree',
     };
   },
   computed: {
@@ -404,6 +436,16 @@ export default Vue.extend({
     canJumpToLastPage() {
       const dbType = this.connectionType === 'postgresql' ? 'postgres' : this.connectionType;
       return this.$bksConfig.db[dbType].allowSkipToLastPage;
+    },
+    isFirestore(): boolean {
+      return this.connectionType === 'firestore'
+    },
+    // Helper: transform table.columns into { name, dataType }[] for FirestoreTreeView
+    treeFields() {
+      return (this.table.columns || []).map((col: any) => ({
+        name: col.name || col.field || col.columnName,
+        dataType: col.dataType || typeof (this.data?.[0]?.[col.name]),
+      }))
     },
     limit() {
       return this.$bksConfig.ui.tableTable.pageSize
