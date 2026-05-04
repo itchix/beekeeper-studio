@@ -186,7 +186,7 @@ export default Vue.extend({
         for (const field of (this.fields as any[])) {
           if (field.name === '__name__') continue
           const rawValue = row[field.name]
-          children.push(this.makeFieldNode(docNodeId, docId, field.name, rawValue, field.dataType, docNodeId, collectionName))
+          children.push(this.makeFieldNode(docNodeId, docId, field.name, rawValue, field.dataType, collectionName))
         }
 
         return {
