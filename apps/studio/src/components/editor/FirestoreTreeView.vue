@@ -8,13 +8,12 @@
         type="text"
         class="search-input"
         placeholder="Filter collections..."
-        @input="onSearchInput"
       />
       <span v-else class="tree-title">
         {{ mode === 'results' ? `Results (${nodeCount} documents)` : '' }}
       </span>
       <div class="tree-toolbar-actions">
-        <button v-if="mode === 'explorer'" class="btn btn-flat btn-icon" title="Refresh" @click="refresh">
+        <button v-if="mode === 'explorer'" class="btn btn-flat btn-icon" title="Refresh" @click="rebuild">
           <i class="material-icons">refresh</i>
         </button>
         <button class="btn btn-flat btn-icon" title="Collapse all" @click="collapseAll">
@@ -33,7 +32,7 @@
     <div v-else-if="error" class="tree-error">
       <i class="material-icons">error_outline</i>
       <span>{{ error }}</span>
-      <button class="btn btn-flat" @click="refresh">Retry</button>
+      <button class="btn btn-flat" @click="rebuild">Retry</button>
     </div>
 
     <div v-else-if="displayNodes.length === 0" class="tree-empty">
@@ -100,7 +99,6 @@ export default Vue.extend({
       TreeNode: FirestoreTreeNodeComponent,
       nodes: [] as FirestoreTreeNode[],
       nodeStates: {} as Record<string, { expanded: boolean }>,
-      nodeChildren: {} as Record<string, FirestoreTreeNode[]>,
       loading: false,
       error: '',
       searchText: '',
@@ -118,8 +116,9 @@ export default Vue.extend({
     },
     displayNodes(): FirestoreTreeNode[] {
       const result: FirestoreTreeNode[] = []
+      const query = this.searchText.toLowerCase()
       for (const node of this.nodes) {
-        if (!this.searchText || node.label.toLowerCase().includes(this.searchText.toLowerCase())) {
+        if (!query || node.label.toLowerCase().includes(query)) {
           if (this.isNodeVisible(node)) {
             result.push(node)
           }
@@ -152,7 +151,6 @@ export default Vue.extend({
     async rebuild() {
       this.nodes = []
       this.nodeStates = {}
-      this.nodeChildren = {}
       this.error = ''
       this.searchText = ''
 
@@ -178,19 +176,24 @@ export default Vue.extend({
 
     buildFromResults() {
       const docNodes = (this.rows as any[]).map((row: any, idx: number) => {
-        const docId = row.__name__ || row.id || `doc-${idx}`
+        const namePath = row.__name__ || row.id || `doc-${idx}`
+        const parts = typeof namePath === 'string' ? namePath.split('/') : [String(namePath)]
+        const docId = parts.length > 1 ? parts.slice(1).join('/') : parts[0]
+        const collectionName = parts.length > 1 ? parts[0] : undefined
         const docNodeId = `doc:${docId}`
+
         const children: FirestoreTreeNode[] = []
         for (const field of (this.fields as any[])) {
           if (field.name === '__name__') continue
           const rawValue = row[field.name]
-          children.push(this.makeFieldNode(docNodeId, docId, field.name, rawValue, field.dataType))
+          children.push(this.makeFieldNode(docNodeId, docId, field.name, rawValue, field.dataType, docNodeId, collectionName))
         }
 
         return {
           id: docNodeId,
           parentId: undefined,
           type: 'document' as const,
+          collectionName,
           label: typeof docId === 'string' ? docId : String(docId),
           displayValue: '',
           children,
@@ -258,7 +261,8 @@ export default Vue.extend({
       docId: string,
       fieldName: string,
       rawValue: unknown,
-      fieldType?: string
+      fieldType?: string,
+      collectionName?: string
     ): FirestoreTreeNode {
       const normalizedType = fieldType?.toLowerCase() || ''
       const isEditable = ['string', 'number', 'boolean', 'null', 'timestamp', 'float', 'integer', 'int64'].includes(
@@ -287,6 +291,7 @@ export default Vue.extend({
         type: 'field',
         label: fieldName,
         docId,
+        collectionName,
         value: rawValue,
         displayValue,
         fieldType: normalizedType || 'string',
@@ -321,15 +326,19 @@ export default Vue.extend({
         const docNodes = rows.map((row: any) => this.makeDocumentNode(name, row))
         collectionNode.children = docNodes
         collectionNode.childCount = docNodes.length
-        this.addChildNodes(collectionNode, docNodes)
         this.pageCursors[name] = result.pageState || null
 
-        // Also flatten field children into nodes array after each document
+        // Build flat list: each doc then its field children, batch insert once
+        const flatNodes: FirestoreTreeNode[] = []
         for (const doc of docNodes) {
+          flatNodes.push(doc)
           if (doc.children && doc.children.length > 0) {
-            this.addChildNodes(doc, doc.children)
+            for (const field of doc.children) {
+              flatNodes.push(field)
+            }
           }
         }
+        this.insertNodesAfter(collectionNode, flatNodes)
       } catch (err: any) {
         this.error = err.message || `Failed to load ${name}`
       } finally {
@@ -360,15 +369,19 @@ export default Vue.extend({
           const existing = collectionNode.children || []
           collectionNode.children = [...existing, ...newDocs]
           collectionNode.childCount = collectionNode.children.length
-          this.addChildNodes(collectionNode, newDocs)
           this.pageCursors[name] = result.pageState || null
 
-          // Also flatten field children for each new document
+          // Build flat list: each new doc then its field children, batch insert once
+          const flatNodes: FirestoreTreeNode[] = []
           for (const doc of newDocs) {
+            flatNodes.push(doc)
             if (doc.children && doc.children.length > 0) {
-              this.addChildNodes(doc, doc.children)
+              for (const field of doc.children) {
+                flatNodes.push(field)
+              }
             }
           }
+          this.insertNodesAfter(collectionNode, flatNodes)
         } catch (err: any) {
           this.error = err.message || 'Failed to load more'
         }
@@ -425,39 +438,37 @@ export default Vue.extend({
         })
     },
 
-    findLastDescendantIndex(parent: FirestoreTreeNode): number {
-      let lastIdx = -1
-      for (let i = 0; i < this.nodes.length; i++) {
+    insertNodesAfter(parent: FirestoreTreeNode, newNodes: FirestoreTreeNode[]) {
+      const parentIdx = this.nodes.findIndex(n => n.id === parent.id)
+      if (parentIdx < 0) {
+        this.nodes.push(...newNodes)
+        return
+      }
+      let insertAfter = parentIdx
+      for (let i = parentIdx + 1; i < this.nodes.length; i++) {
         const n = this.nodes[i]
-        if (n.id === parent.id) {
-          lastIdx = i
-        } else if (n.parentId) {
-          let ancestorId: string | undefined = n.parentId
-          while (ancestorId) {
-            if (ancestorId === parent.id) {
-              lastIdx = i
-              break
-            }
-            const ancestor = this.nodes.find(a => a.id === ancestorId)
-            ancestorId = ancestor?.parentId
+        let ancestorId = n.parentId
+        while (ancestorId) {
+          if (ancestorId === parent.id) {
+            insertAfter = i
+            break
           }
+          const ancestor = this.nodes.find(a => a.id === ancestorId)
+          ancestorId = ancestor?.parentId
         }
       }
-      return lastIdx
-    },
-
-    addChildNodes(parent: FirestoreTreeNode, children: FirestoreTreeNode[]) {
-      const insertIdx = this.findLastDescendantIndex(parent) + 1
-      this.nodes.splice(insertIdx, 0, ...children)
+      this.nodes.splice(insertAfter + 1, 0, ...newNodes)
     },
 
     isNodeVisible(node: FirestoreTreeNode): boolean {
       if (node.level === 0) return true
-      if (!node.parentId) return true
 
-      const parent = this.nodes.find(n => n.id === node.parentId)
-      if (!parent || !parent.expanded) return false
-
+      let currentId: string | undefined = node.parentId
+      while (currentId) {
+        const ancestor = this.nodes.find((n) => n.id === currentId)
+        if (!ancestor || !ancestor.expanded) return false
+        currentId = ancestor.parentId
+      }
       return true
     },
 
@@ -467,10 +478,6 @@ export default Vue.extend({
       } else {
         this.nodeStates[node.id].expanded = node.expanded
       }
-    },
-
-    onSearchInput() {
-      this.$forceUpdate()
     },
 
     handleKeydown(e: KeyboardEvent) {
@@ -496,9 +503,6 @@ export default Vue.extend({
       }
     },
 
-    async refresh() {
-      await this.rebuild()
-    },
   },
 })
 </script>
