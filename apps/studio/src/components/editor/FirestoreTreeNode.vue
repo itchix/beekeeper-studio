@@ -10,7 +10,11 @@
     }"
     :style="{ paddingLeft: source.level * 20 + 8 + 'px' }"
     role="treeitem"
-    :aria-expanded="source.children && source.children.length ? String(source.expanded) : undefined"
+    :aria-expanded="
+      source.children && source.children.length
+        ? String(source.expanded)
+        : undefined
+    "
     :aria-level="source.level + 1"
   >
     <!-- Chevron -->
@@ -28,8 +32,12 @@
     <!-- Icon -->
     <span class="icon">
       <i v-if="source.type === 'collection'" class="material-icons">folder</i>
-      <i v-else-if="source.type === 'document'" class="material-icons">description</i>
-      <i v-else-if="source.type === 'subcollection-list'" class="material-icons">folder_open</i>
+      <i v-else-if="source.type === 'document'" class="material-icons"
+        >description</i
+      >
+      <i v-else-if="source.type === 'subcollection-list'" class="material-icons"
+        >folder_open</i
+      >
       <i v-else class="material-icons">vpn_key</i>
     </span>
 
@@ -44,7 +52,8 @@
         :class="{ editable: source.isEditable }"
         @click.stop="copyValue"
         @dblclick.stop="source.isEditable && startEdit()"
-      >{{ source.displayValue }}</span>
+        >{{ source.displayValue }}</span
+      >
     </span>
 
     <!-- Inline edit mode -->
@@ -93,35 +102,37 @@
     </span>
 
     <!-- Child count badge -->
-    <span v-if="source.childCount != null && !source.expanded" class="child-count">
+    <span
+      v-if="source.childCount != null && !source.expanded"
+      class="child-count"
+    >
       {{ source.childCount }}
     </span>
   </div>
 </template>
 
 <script lang="ts">
-import Vue from 'vue'
-import Noty from 'noty'
+import Vue from "vue";
 
 interface FirestoreTreeNode {
-  id: string
-  type: 'collection' | 'document' | 'field' | 'subcollection-list'
-  label: string
-  collectionName?: string
-  docId?: string
-  value?: unknown
-  displayValue: string
-  fieldType?: string
-  children?: FirestoreTreeNode[]
-  childCount?: number
-  expanded: boolean
-  loading: boolean
-  level: number
-  isEditable: boolean
+  id: string;
+  type: "collection" | "document" | "field" | "subcollection-list";
+  label: string;
+  collectionName?: string;
+  docId?: string;
+  value?: unknown;
+  displayValue: string;
+  fieldType?: string;
+  children?: FirestoreTreeNode[];
+  childCount?: number;
+  expanded: boolean;
+  loading: boolean;
+  level: number;
+  isEditable: boolean;
 }
 
 export default Vue.extend({
-  name: 'FirestoreTreeNode',
+  name: "FirestoreTreeNode",
   props: {
     source: { type: Object as () => FirestoreTreeNode, required: true },
     onExpand: { type: Function, default: () => {} },
@@ -132,76 +143,76 @@ export default Vue.extend({
       editing: false,
       saving: false,
       editValue: undefined as unknown,
-    }
+    };
   },
   computed: {
     editInputType(): string {
-      const ft = this.source.fieldType
-      if (ft === 'number' || ft === 'float' || ft === 'integer' || ft === 'int64') return 'number'
-      if (ft === 'boolean') return 'boolean'
-      return 'text'
+      const ft = this.source.fieldType;
+      if (
+        ft === "number" ||
+        ft === "float" ||
+        ft === "integer" ||
+        ft === "int64"
+      )
+        return "number";
+      if (ft === "boolean") return "boolean";
+      return "text";
     },
   },
   methods: {
     startEdit() {
-      this.editValue = this.source.value
-      this.editing = true
+      this.editValue = this.source.value;
+      this.editing = true;
       this.$nextTick(() => {
-        const input = this.$refs.editInput as HTMLElement | undefined
+        const input = this.$refs.editInput as HTMLElement | undefined;
         if (input instanceof HTMLInputElement) {
-          input.focus()
-          input.select()
+          input.focus();
+          input.select();
         }
-      })
+      });
     },
     saveEdit() {
-      if (!this.editing) return
-      this.editing = false
-      this.saving = true
+      if (!this.editing) return;
+      this.editing = false;
+      this.saving = true;
       this.onEdit(this.source, this.editValue, (success: boolean) => {
-        this.saving = false
+        this.saving = false;
         if (!success) {
-          this.editValue = this.source.value
+          this.editValue = this.source.value;
         }
-      })
+      });
     },
     cancelEdit() {
-      this.editing = false
-      this.editValue = this.source.value
+      this.editing = false;
+      this.editValue = this.source.value;
     },
     copyValue() {
-      const value = this.source.value
-      let text = ''
+      const value = this.source.value;
+      let text = "";
       if (value === null || value === undefined) {
-        text = 'null'
-      } else if (typeof value === 'string') {
-        text = value
-      } else if (typeof value === 'number' || typeof value === 'boolean') {
-        text = String(value)
+        text = "null";
+      } else if (typeof value === "string") {
+        text = value;
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        text = String(value);
       } else if (value instanceof Date) {
-        text = value.toISOString()
+        text = value.toISOString();
       } else {
         try {
-          text = JSON.stringify(value)
+          text = JSON.stringify(value);
         } catch {
-          text = '[Object]'
+          text = "[Object]";
         }
       }
-      ;(this as any).$native.clipboard.writeText(text)
-      new Noty({
-        text: 'Copied!',
-        type: 'success',
-        timeout: 1500,
-        layout: 'bottomRight',
-      }).show()
+      (this as any).$native.clipboard.writeText(text);
     },
   },
-})
+});
 </script>
 
 <style lang="scss" scoped>
-@use 'sass:color';
-@import '../../assets/styles/app/_variables';
+@use "sass:color";
+@import "../../assets/styles/app/_variables";
 
 .firestore-tree-node {
   display: flex;
@@ -354,7 +365,11 @@ export default Vue.extend({
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
