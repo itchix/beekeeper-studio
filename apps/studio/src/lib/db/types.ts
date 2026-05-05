@@ -145,7 +145,8 @@ export interface SurrealDBOptions {
 
 export enum FirestoreAuthType {
   ServiceAccount = 'serviceAccount',
-  ApplicationDefault = 'applicationDefault'
+  ApplicationDefault = 'applicationDefault',
+  Emulator = 'emulator',
 }
 
 export interface FirestoreOptions {
@@ -154,6 +155,7 @@ export interface FirestoreOptions {
   serviceAccountPath?: string;
   projectId?: string;
   databaseId?: string;
+  emulatorHost?: string;
 }
 
 export interface FirestoreAuthUser {

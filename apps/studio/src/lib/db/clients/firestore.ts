@@ -102,7 +102,16 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
     const appName = `bks-firestore-${Date.now()}`;
 
-    if (authType === FirestoreAuthType.ApplicationDefault) {
+    if (authType === FirestoreAuthType.Emulator) {
+      const emulatorHost = this.firestoreOptions?.emulatorHost || 'localhost:8080';
+      const [emulatorHostname] = emulatorHost.split(':');
+      process.env.FIRESTORE_EMULATOR_HOST = emulatorHost;
+      process.env.FIREBASE_AUTH_EMULATOR_HOST = `${emulatorHostname}:9099`;
+      this.app = initializeApp(
+        { projectId: this.firestoreOptions?.projectId || 'demo-project' },
+        appName
+      );
+    } else if (authType === FirestoreAuthType.ApplicationDefault) {
       this.app = initializeApp(
         {
           credential: applicationDefault(),
