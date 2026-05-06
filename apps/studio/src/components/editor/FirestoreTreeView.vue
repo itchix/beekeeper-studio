@@ -224,7 +224,10 @@ export default Vue.extend({
         const docNodeId = `doc:${docId}`;
 
         const children: FirestoreTreeNode[] = [];
-        for (const field of this.fields as any[]) {
+        const sortedFields = [...(this.fields as any[])].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+        for (const field of sortedFields) {
           if (field.name === "__name__") continue;
           const rawValue = row[field.name];
           children.push(
@@ -285,7 +288,7 @@ export default Vue.extend({
       const docId = docData.__name__ || "unknown";
       const docNodeId = `doc:${collectionName}/${docId}`;
       const children: FirestoreTreeNode[] = [];
-      for (const key of Object.keys(docData)) {
+      for (const key of Object.keys(docData).sort()) {
         if (key === "__name__") continue;
         children.push(
           this.makeFieldNode(
