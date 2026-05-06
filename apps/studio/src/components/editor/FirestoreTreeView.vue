@@ -269,11 +269,20 @@ export default Vue.extend({
         normalizedType
       ) || !normalizedType
 
+      const isTimestamp = (v: any) =>
+        v && typeof v === 'object' && typeof v.toDate === 'function' && typeof v.seconds === 'number'
+      const isGeoPoint = (v: any) =>
+        v && typeof v === 'object' && typeof v.latitude === 'number' && typeof v.longitude === 'number'
+
       let displayValue = ''
       if (rawValue === null || rawValue === undefined) {
         displayValue = 'null'
       } else if (rawValue instanceof Date) {
         displayValue = rawValue.toISOString()
+      } else if (isTimestamp(rawValue)) {
+        displayValue = (rawValue as any).toDate().toISOString()
+      } else if (isGeoPoint(rawValue)) {
+        displayValue = `${(rawValue as any).latitude}, ${(rawValue as any).longitude}`
       } else if (typeof rawValue === 'object') {
         try {
           const s = JSON.stringify(rawValue)
