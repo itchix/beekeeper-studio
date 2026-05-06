@@ -181,24 +181,24 @@
         </template>
 
         <!-- View mode toggle (Firestore only) -->
-        <x-button
-          v-if="isFirestore"
-          class="btn btn-flat"
-          :class="{ active: viewMode === 'grid' }"
-          title="Grid view"
-          @click.prevent="viewMode = 'grid'"
-        >
-          <i class="material-icons">grid_on</i>
-        </x-button>
-        <x-button
-          v-if="isFirestore"
-          class="btn btn-flat"
-          :class="{ active: viewMode === 'tree' }"
-          title="Tree view"
-          @click.prevent="viewMode = 'tree'"
-        >
-          <i class="material-icons">account_tree</i>
-        </x-button>
+        <div v-if="isFirestore" class="view-mode-toggle">
+          <x-button
+            class="btn btn-flat"
+            :class="{ active: viewMode === 'grid' }"
+            title="Grid view"
+            @click.prevent="viewMode = 'grid'"
+          >
+            <i class="material-icons">grid_on</i>
+          </x-button>
+          <x-button
+            class="btn btn-flat"
+            :class="{ active: viewMode === 'tree' }"
+            title="Tree view"
+            @click.prevent="viewMode = 'tree'"
+          >
+            <i class="material-icons">account_tree</i>
+          </x-button>
+        </div>
         <x-button
           v-tooltip="
             `Refresh Table (${$bksConfig.keybindings.general.refresh})`

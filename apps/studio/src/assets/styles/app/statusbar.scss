@@ -1,5 +1,5 @@
 @use "sass:color";
-$button-height:     $statusbar-height * 0.72;
+$button-height: $statusbar-height * 0.72;
 
 .global-status-bar {
   display: flex;
@@ -26,11 +26,10 @@ $button-height:     $statusbar-height * 0.72;
 
   input::-webkit-outer-spin-button,
   input::-webkit-inner-spin-button {
-      /* display: none; <- Crashes Chrome on hover */
-      -webkit-appearance: none;
-      margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
+    /* display: none; <- Crashes Chrome on hover */
+    -webkit-appearance: none;
+    margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
   }
-
 
   .statusbar > .col {
     display: flex;
@@ -40,7 +39,8 @@ $button-height:     $statusbar-height * 0.72;
     border-radius: 1.8rem;
   }
   .btn {
-    &.error, &.error:hover {
+    &.error,
+    &.error:hover {
       pointer-events: all !important;
     }
   }
@@ -68,7 +68,6 @@ $button-height:     $statusbar-height * 0.72;
     padding: 0 $gutter-h;
   }
 
-
   .connection-button-wrapper {
     height: 100%;
     overflow: hidden;
@@ -79,10 +78,10 @@ $button-height:     $statusbar-height * 0.72;
     &.default {
       color: $theme-base;
     }
-    > .btn{
+    > .btn {
       padding: 0;
       margin: 0;
-      box-shadow: none!important;
+      box-shadow: none !important;
       color: inherit;
       min-width: min-content;
       border-radius: $btn-border-radius-small;
@@ -93,6 +92,22 @@ $button-height:     $statusbar-height * 0.72;
   .statusbar-info {
     display: flex;
     align-items: center;
+  }
+
+  .view-mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+
+    > .btn.active {
+      background: color-mix(in srgb, currentColor 18%, transparent);
+      box-shadow: inset 0 0 0 1px
+        color-mix(in srgb, currentColor 28%, transparent);
+
+      &:hover {
+        background: color-mix(in srgb, currentColor 24%, transparent);
+      }
+    }
   }
 
   // Buttons
@@ -149,7 +164,10 @@ $button-height:     $statusbar-height * 0.72;
       box-shadow: inset 0 0 0 1px rgba($statusbar-text, 0.025);
       color: $statusbar-text-default;
       &.deactivated {
-        background-color: color.adjust(rgba($statusbar-text, 0.35), $lightness: -10%);
+        background-color: color.adjust(
+          rgba($statusbar-text, 0.35),
+          $lightness: -10%
+        );
         cursor: not-allowed;
       }
     }
@@ -172,10 +190,11 @@ $button-height:     $statusbar-height * 0.72;
       background: transparent;
       color: $statusbar-text-default;
       // color: $theme-bg;
-      border-radius: 0!important;
+      border-radius: 0 !important;
       margin-top: 0;
       margin: 0;
-      &:hover, &:hover[expanded] {
+      &:hover,
+      &:hover[expanded] {
         background: rgba($statusbar-text, 0.05);
       }
       &[menu] {
@@ -248,11 +267,12 @@ $button-height:     $statusbar-height * 0.72;
       color: $statusbar-text;
       height: $button-height;
       line-height: $button-height;
-      -webkit-appearance: none!important;
-      appearance: none!important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
       font-weight: 600;
       font-size: 12px;
-      background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' fill='rgba(0,0,0, 0.87)'><polygon points='0,0 8,0 4,4'/></svg>") no-repeat scroll 98% 60% transparent !important;
+      background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' fill='rgba(0,0,0, 0.87)'><polygon points='0,0 8,0 4,4'/></svg>")
+        no-repeat scroll 98% 60% transparent !important;
       option {
         color: $text;
       }
@@ -268,7 +288,7 @@ $button-height:     $statusbar-height * 0.72;
     font-weight: 500;
     line-height: $statusbar-height;
     overflow: hidden;
-    text-overflow:ellipsis;
+    text-overflow: ellipsis;
     i {
       font-size: 18px;
       line-height: $statusbar-height;
@@ -298,7 +318,8 @@ $button-height:     $statusbar-height * 0.72;
   }
 
   .row-counts {
-    .truncated-rows, .records {
+    .truncated-rows,
+    .records {
       margin-left: $gutter-h * 0.5;
     }
   }
@@ -342,7 +363,8 @@ $button-height:     $statusbar-height * 0.72;
     .btn-flat {
       color: $theme-base;
       background: rgba($theme-base, 0.06);
-      &:hover, &:focus {
+      &:hover,
+      &:focus {
         background: rgba($theme-base, 0.12);
       }
     }
@@ -350,11 +372,11 @@ $button-height:     $statusbar-height * 0.72;
       background: $theme-base;
       color: rgba($theme-bg, 0.87);
       transition: background 0.15s ease-in-out;
-      &:hover, &:focus {
+      &:hover,
+      &:focus {
         background: rgba($theme-base, 0.87);
         color: $theme-bg;
       }
     }
   }
-
 }
