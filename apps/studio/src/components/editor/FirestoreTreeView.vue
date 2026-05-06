@@ -166,7 +166,7 @@ export default Vue.extend({
   watch: {
     rows: {
       handler() {
-        this.rebuild();
+        this.rebuild({ preserveState: true, preserveSearch: true });
       },
       immediate: true,
     },
@@ -177,11 +177,17 @@ export default Vue.extend({
     },
   },
   methods: {
-    async rebuild() {
+    async rebuild(
+      options: { preserveState?: boolean; preserveSearch?: boolean } = {}
+    ) {
       this.nodes = [];
-      this.nodeStates = {};
+      if (!options.preserveState) {
+        this.nodeStates = {};
+      }
       this.error = "";
-      this.searchText = "";
+      if (!options.preserveSearch) {
+        this.searchText = "";
+      }
 
       if (this.mode === "results" && this.rows.length > 0) {
         await this.buildFromResults();
@@ -242,7 +248,7 @@ export default Vue.extend({
           displayValue: "",
           children,
           childCount: children.length,
-          expanded: false,
+          expanded: this.nodeStates[docNodeId]?.expanded ?? false,
           loading: false,
           level: 0,
           isEditable: false,
@@ -268,7 +274,7 @@ export default Vue.extend({
         label: name,
         collectionName: name,
         displayValue: "",
-        expanded: false,
+        expanded: this.nodeStates[`col:${name}`]?.expanded ?? false,
         loading: false,
         level: 0,
         isEditable: false,
@@ -302,7 +308,7 @@ export default Vue.extend({
         displayValue: "",
         children,
         childCount: children.length,
-        expanded: false,
+        expanded: this.nodeStates[docNodeId]?.expanded ?? false,
         loading: false,
         level: 1,
         isEditable: false,

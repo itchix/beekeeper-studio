@@ -65,8 +65,8 @@
         v-model="editValue"
         type="text"
         class="edit-input"
-        @keydown.enter="saveEdit"
-        @keydown.escape="cancelEdit"
+        @keydown.enter.prevent.stop="saveEdit"
+        @keydown.escape.prevent.stop="cancelEdit"
         @blur="saveEdit"
       />
       <input
@@ -76,8 +76,8 @@
         v-model.number="editValue"
         type="number"
         class="edit-input"
-        @keydown.enter="saveEdit"
-        @keydown.escape="cancelEdit"
+        @keydown.enter.prevent.stop="saveEdit"
+        @keydown.escape.prevent.stop="cancelEdit"
         @blur="saveEdit"
       />
       <select
@@ -87,9 +87,9 @@
         v-model="editValue"
         class="edit-input"
         @change="saveEdit"
-        @keydown.enter="saveEdit"
+        @keydown.enter.prevent.stop="saveEdit"
         @blur="saveEdit"
-        @keydown.escape="cancelEdit"
+        @keydown.escape.prevent.stop="cancelEdit"
       >
         <option :value="true">true</option>
         <option :value="false">false</option>
@@ -135,8 +135,8 @@ export default Vue.extend({
   name: "FirestoreTreeNode",
   props: {
     source: { type: Object as () => FirestoreTreeNode, required: true },
-    onExpand: { type: Function, default: () => {} },
-    onEdit: { type: Function, default: () => {} },
+    onExpand: { type: Function, default: () => undefined },
+    onEdit: { type: Function, default: () => undefined },
   },
   data() {
     return {
