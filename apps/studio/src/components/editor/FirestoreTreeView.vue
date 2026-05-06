@@ -1,5 +1,10 @@
 <template>
-  <div class="firestore-tree-view" role="tree" @keydown="handleKeydown" tabindex="0">
+  <div
+    class="firestore-tree-view"
+    role="tree"
+    @keydown="handleKeydown"
+    tabindex="0"
+  >
     <!-- Toolbar -->
     <div class="tree-toolbar">
       <input
@@ -10,13 +15,22 @@
         placeholder="Filter collections..."
       />
       <span v-else class="tree-title">
-        {{ mode === 'results' ? `Results (${nodeCount} documents)` : '' }}
+        {{ mode === "results" ? `Results (${nodeCount} documents)` : "" }}
       </span>
       <div class="tree-toolbar-actions">
-        <button v-if="mode === 'explorer'" class="btn btn-flat btn-icon" title="Refresh" @click="rebuild">
+        <button
+          v-if="mode === 'explorer'"
+          class="btn btn-flat btn-icon"
+          title="Refresh"
+          @click="rebuild"
+        >
           <i class="material-icons">refresh</i>
         </button>
-        <button class="btn btn-flat btn-icon" title="Collapse all" @click="collapseAll">
+        <button
+          class="btn btn-flat btn-icon"
+          title="Collapse all"
+          @click="collapseAll"
+        >
           <i class="material-icons">unfold_less</i>
         </button>
       </div>
@@ -25,7 +39,7 @@
     <!-- Tree body -->
     <div v-if="loading" class="tree-loading">
       <div v-for="n in 4" :key="n" class="skeleton-row">
-        <span class="skeleton-bar" :style="{ width: 40 + (n * 30) + 'px' }" />
+        <span class="skeleton-bar" :style="{ width: 40 + n * 30 + 'px' }" />
       </div>
     </div>
 
@@ -36,7 +50,9 @@
     </div>
 
     <div v-else-if="displayNodes.length === 0" class="tree-empty">
-      <span>{{ mode === 'explorer' ? 'No collections found' : 'No results' }}</span>
+      <span>{{
+        mode === "explorer" ? "No collections found" : "No results"
+      }}</span>
     </div>
 
     <template v-else>
@@ -51,7 +67,11 @@
         :extra-props="extraProps"
       />
       <div v-if="hasMore" class="tree-load-more">
-        <button class="btn btn-flat btn-small" :disabled="loadingMore" @click="loadMoreDocuments">
+        <button
+          class="btn btn-flat btn-small"
+          :disabled="loadingMore"
+          @click="loadMoreDocuments"
+        >
           <i v-if="loadingMore" class="material-icons spinner">sync</i>
           <span>Load more...</span>
         </button>
@@ -61,38 +81,38 @@
 </template>
 
 <script lang="ts">
-import Vue from 'vue'
-import VirtualList from 'vue-virtual-scroll-list'
-import FirestoreTreeNodeComponent from './FirestoreTreeNode.vue'
+import Vue from "vue";
+import VirtualList from "vue-virtual-scroll-list";
+import FirestoreTreeNodeComponent from "./FirestoreTreeNode.vue";
 
 interface FirestoreTreeNode {
-  id: string
-  parentId?: string
-  type: 'collection' | 'document' | 'field' | 'subcollection-list'
-  label: string
-  collectionName?: string
-  docId?: string
-  value?: unknown
-  displayValue: string
-  fieldType?: string
-  children?: FirestoreTreeNode[]
-  childCount?: number
-  expanded: boolean
-  loading: boolean
-  level: number
-  isEditable: boolean
+  id: string;
+  parentId?: string;
+  type: "collection" | "document" | "field" | "subcollection-list";
+  label: string;
+  collectionName?: string;
+  docId?: string;
+  value?: unknown;
+  displayValue: string;
+  fieldType?: string;
+  children?: FirestoreTreeNode[];
+  childCount?: number;
+  expanded: boolean;
+  loading: boolean;
+  level: number;
+  isEditable: boolean;
 }
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 50;
 
 export default Vue.extend({
-  name: 'FirestoreTreeView',
+  name: "FirestoreTreeView",
   components: { VirtualList },
   props: {
     connection: { type: Object, required: true },
     rows: { type: Array, default: () => [] },
     fields: { type: Array, default: () => [] },
-    mode: { type: String as () => 'explorer' | 'results', default: 'results' },
+    mode: { type: String as () => "explorer" | "results", default: "results" },
   },
   data() {
     return {
@@ -100,117 +120,139 @@ export default Vue.extend({
       nodes: [] as FirestoreTreeNode[],
       nodeStates: {} as Record<string, { expanded: boolean }>,
       loading: false,
-      error: '',
-      searchText: '',
+      error: "",
+      searchText: "",
       focusedIndex: 0,
       pageCursors: {} as Record<string, string | null>,
       loadingMore: false,
-    }
+    };
   },
   computed: {
     extraProps() {
       return {
         onExpand: this.handleExpand,
         onEdit: this.handleEdit,
-      }
+      };
     },
     displayNodes(): FirestoreTreeNode[] {
-      const result: FirestoreTreeNode[] = []
-      const query = this.searchText.toLowerCase()
+      const result: FirestoreTreeNode[] = [];
+      const query = this.searchText.toLowerCase();
       for (const node of this.nodes) {
         if (!query || node.label.toLowerCase().includes(query)) {
           if (this.isNodeVisible(node)) {
-            result.push(node)
+            result.push(node);
           }
         }
       }
-      return result
+      return result;
     },
     nodeCount(): number {
-      return this.nodes.filter((n) => n.type === 'document').length
+      return this.nodes.filter((n) => n.type === "document").length;
     },
     hasMore(): boolean {
       for (const node of this.nodes) {
-        if (node.type === 'collection' && node.expanded && this.pageCursors[node.collectionName!]) {
-          return true
+        if (
+          node.type === "collection" &&
+          node.expanded &&
+          this.pageCursors[node.collectionName!]
+        ) {
+          return true;
         }
       }
-      return false
+      return false;
     },
   },
   watch: {
     rows: {
-      handler() { this.rebuild() },
+      handler() {
+        this.rebuild();
+      },
       immediate: true,
     },
     mode: {
-      handler() { this.rebuild() },
+      handler() {
+        this.rebuild();
+      },
     },
   },
   methods: {
     async rebuild() {
-      this.nodes = []
-      this.nodeStates = {}
-      this.error = ''
-      this.searchText = ''
+      this.nodes = [];
+      this.nodeStates = {};
+      this.error = "";
+      this.searchText = "";
 
-      if (this.mode === 'results' && this.rows.length > 0) {
-        await this.buildFromResults()
-      } else if (this.mode === 'explorer') {
-        await this.buildFromCollections()
+      if (this.mode === "results" && this.rows.length > 0) {
+        await this.buildFromResults();
+      } else if (this.mode === "explorer") {
+        await this.buildFromCollections();
       }
     },
 
     async buildFromCollections() {
-      this.loading = true
+      this.loading = true;
       try {
-        const tables = await this.connection.listTables()
-        const collections = tables.filter((t: any) => t.entityType === 'table')
-        this.nodes = collections.map((c: any) => this.makeCollectionNode(c.name))
+        const tables = await this.connection.listTables();
+        const collections = tables.filter((t: any) => t.entityType === "table");
+        this.nodes = collections.map((c: any) =>
+          this.makeCollectionNode(c.name)
+        );
       } catch (err: any) {
-        this.error = err.message || 'Failed to list collections'
+        this.error = err.message || "Failed to list collections";
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
 
     buildFromResults() {
       const docNodes = (this.rows as any[]).map((row: any, idx: number) => {
-        const namePath = row.__name__ || row.id || `doc-${idx}`
-        const parts = typeof namePath === 'string' ? namePath.split('/') : [String(namePath)]
-        const docId = parts.length > 1 ? parts.slice(1).join('/') : parts[0]
-        const collectionName = parts.length > 1 ? parts[0] : undefined
-        const docNodeId = `doc:${docId}`
+        const namePath = row.__name__ || row.id || `doc-${idx}`;
+        const parts =
+          typeof namePath === "string"
+            ? namePath.split("/")
+            : [String(namePath)];
+        const docId = parts.length > 1 ? parts.slice(1).join("/") : parts[0];
+        const collectionName = parts.length > 1 ? parts[0] : undefined;
+        const docNodeId = `doc:${docId}`;
 
-        const children: FirestoreTreeNode[] = []
-        for (const field of (this.fields as any[])) {
-          if (field.name === '__name__') continue
-          const rawValue = row[field.name]
-          children.push(this.makeFieldNode(docNodeId, docId, field.name, rawValue, field.dataType, collectionName))
+        const children: FirestoreTreeNode[] = [];
+        for (const field of this.fields as any[]) {
+          if (field.name === "__name__") continue;
+          const rawValue = row[field.name];
+          children.push(
+            this.makeFieldNode(
+              docNodeId,
+              docId,
+              field.name,
+              rawValue,
+              field.dataType,
+              collectionName
+            )
+          );
         }
 
         return {
           id: docNodeId,
           parentId: undefined,
-          type: 'document' as const,
+          type: "document" as const,
           collectionName,
-          label: typeof docId === 'string' ? docId : String(docId),
-          displayValue: '',
+          label: typeof docId === "string" ? docId : String(docId),
+          displayValue: "",
           children,
           childCount: children.length,
           expanded: false,
           loading: false,
           level: 0,
           isEditable: false,
-        }
-      })
+        };
+      });
 
       // Flatten: for each doc, insert doc then its field children
       for (const doc of docNodes) {
-        this.nodes.push(doc)
+        this.nodes.push(doc);
         if (doc.children) {
           for (const field of doc.children) {
-            this.nodes.push(field)
+            this.nodes.push(field);
           }
         }
       }
@@ -220,40 +262,49 @@ export default Vue.extend({
       return {
         id: `col:${name}`,
         parentId: undefined,
-        type: 'collection',
+        type: "collection",
         label: name,
         collectionName: name,
-        displayValue: '',
+        displayValue: "",
         expanded: false,
         loading: false,
         level: 0,
         isEditable: false,
-      }
+      };
     },
 
     makeDocumentNode(collectionName: string, docData: any): FirestoreTreeNode {
-      const docId = docData.__name__ || 'unknown'
-      const docNodeId = `doc:${collectionName}/${docId}`
-      const children: FirestoreTreeNode[] = []
+      const docId = docData.__name__ || "unknown";
+      const docNodeId = `doc:${collectionName}/${docId}`;
+      const children: FirestoreTreeNode[] = [];
       for (const key of Object.keys(docData)) {
-        if (key === '__name__') continue
-        children.push(this.makeFieldNode(docNodeId, docId, key, docData[key], typeof docData[key], collectionName))
+        if (key === "__name__") continue;
+        children.push(
+          this.makeFieldNode(
+            docNodeId,
+            docId,
+            key,
+            docData[key],
+            typeof docData[key],
+            collectionName
+          )
+        );
       }
       return {
         id: docNodeId,
         parentId: `col:${collectionName}`,
-        type: 'document',
-        label: typeof docId === 'string' ? docId : String(docId),
+        type: "document",
+        label: typeof docId === "string" ? docId : String(docId),
         collectionName,
-        docId: typeof docId === 'string' ? docId : String(docId),
-        displayValue: '',
+        docId: typeof docId === "string" ? docId : String(docId),
+        displayValue: "",
         children,
         childCount: children.length,
         expanded: false,
         loading: false,
         level: 1,
         isEditable: false,
-      }
+      };
     },
 
     makeFieldNode(
@@ -264,261 +315,350 @@ export default Vue.extend({
       fieldType?: string,
       collectionName?: string
     ): FirestoreTreeNode {
-      const normalizedType = fieldType?.toLowerCase() || ''
-      const isEditable = ['string', 'number', 'boolean', 'null', 'timestamp', 'float', 'integer', 'int64'].includes(
-        normalizedType
-      ) || !normalizedType
-
+      const normalizedType = fieldType?.toLowerCase() || "";
+      const normalizedTypeParts = normalizedType
+        .split("|")
+        .map((part) => part.trim())
+        .filter(Boolean);
       const isTimestamp = (v: any) =>
-        v && typeof v === 'object' && typeof v.toDate === 'function' && typeof v.seconds === 'number'
+        v &&
+        typeof v === "object" &&
+        typeof v.toDate === "function" &&
+        typeof v.seconds === "number";
       const isGeoPoint = (v: any) =>
-        v && typeof v === 'object' && typeof v.latitude === 'number' && typeof v.longitude === 'number'
+        v &&
+        typeof v === "object" &&
+        typeof v.latitude === "number" &&
+        typeof v.longitude === "number";
+      const isEditable =
+        [
+          "string",
+          "number",
+          "boolean",
+          "null",
+          "timestamp",
+          "float",
+          "integer",
+          "int64",
+          "geopoint",
+        ].some((type) => normalizedTypeParts.includes(type)) ||
+        (!normalizedType &&
+          !Array.isArray(rawValue) &&
+          typeof rawValue !== "object") ||
+        isGeoPoint(rawValue);
 
-      let displayValue = ''
+      let displayValue = "";
       if (rawValue === null || rawValue === undefined) {
-        displayValue = 'null'
+        displayValue = "null";
       } else if (rawValue instanceof Date) {
-        displayValue = rawValue.toISOString()
+        displayValue = rawValue.toISOString();
       } else if (isTimestamp(rawValue)) {
-        displayValue = (rawValue as any).toDate().toISOString()
+        displayValue = (rawValue as any).toDate().toISOString();
       } else if (isGeoPoint(rawValue)) {
-        displayValue = `${(rawValue as any).latitude}, ${(rawValue as any).longitude}`
-      } else if (typeof rawValue === 'object') {
+        displayValue = `${(rawValue as any).latitude}, ${
+          (rawValue as any).longitude
+        }`;
+      } else if (typeof rawValue === "object") {
         try {
-          const s = JSON.stringify(rawValue)
-          displayValue = s.length > 80 ? s.slice(0, 80) + '\u2026' : s
+          const s = JSON.stringify(rawValue);
+          displayValue = s.length > 80 ? s.slice(0, 80) + "\u2026" : s;
         } catch {
-          displayValue = '[Object]'
+          displayValue = "[Object]";
         }
       } else {
-        displayValue = String(rawValue)
+        displayValue = String(rawValue);
       }
 
       return {
         id: `field:${docId}.${fieldName}`,
         parentId,
-        type: 'field',
+        type: "field",
         label: fieldName,
         docId,
         collectionName,
         value: rawValue,
         displayValue,
-        fieldType: normalizedType || 'string',
+        fieldType: normalizedType || "string",
         level: 2,
         isEditable,
         expanded: false,
         loading: false,
-      }
+      };
     },
 
     async handleExpand(_event: Event, node: FirestoreTreeNode) {
-      if (node.type === 'field') return
+      if (node.type === "field") return;
 
-      node.expanded = !node.expanded
-      this.updateNodeState(node)
+      node.expanded = !node.expanded;
+      this.updateNodeState(node);
 
-      if (node.expanded && node.type === 'collection' && (!node.children || node.children.length === 0)) {
-        await this.loadDocuments(node)
+      if (
+        node.expanded &&
+        node.type === "collection" &&
+        (!node.children || node.children.length === 0)
+      ) {
+        await this.loadDocuments(node);
       }
 
-      this.$forceUpdate()
+      this.$forceUpdate();
     },
 
     async loadDocuments(collectionNode: FirestoreTreeNode) {
-      const name = collectionNode.collectionName!
-      collectionNode.loading = true
-      this.$forceUpdate()
+      const name = collectionNode.collectionName!;
+      collectionNode.loading = true;
+      this.$forceUpdate();
 
       try {
-        const result = await this.connection.selectTop(name, null, PAGE_SIZE, [], [])
-        const rows = result.result || []
-        const docNodes = rows.map((row: any) => this.makeDocumentNode(name, row))
-        collectionNode.children = docNodes
-        collectionNode.childCount = docNodes.length
-        this.pageCursors[name] = result.pageState || null
+        const result = await this.connection.selectTop(
+          name,
+          null,
+          PAGE_SIZE,
+          [],
+          []
+        );
+        const rows = result.result || [];
+        const docNodes = rows.map((row: any) =>
+          this.makeDocumentNode(name, row)
+        );
+        collectionNode.children = docNodes;
+        collectionNode.childCount = docNodes.length;
+        this.pageCursors[name] = result.pageState || null;
 
         // Build flat list: each doc then its field children, batch insert once
-        const flatNodes: FirestoreTreeNode[] = []
+        const flatNodes: FirestoreTreeNode[] = [];
         for (const doc of docNodes) {
-          flatNodes.push(doc)
+          flatNodes.push(doc);
           if (doc.children && doc.children.length > 0) {
             for (const field of doc.children) {
-              flatNodes.push(field)
+              flatNodes.push(field);
             }
           }
         }
-        this.insertNodesAfter(collectionNode, flatNodes)
+        this.insertNodesAfter(collectionNode, flatNodes);
       } catch (err: any) {
-        this.error = err.message || `Failed to load ${name}`
+        this.error = err.message || `Failed to load ${name}`;
       } finally {
-        collectionNode.loading = false
-        this.$forceUpdate()
+        collectionNode.loading = false;
+        this.$forceUpdate();
       }
     },
 
     async loadMoreDocuments() {
       const collectionsToLoad = this.nodes.filter(
-        (n) => n.type === 'collection' && n.expanded && this.pageCursors[n.collectionName!]
-      )
-      if (collectionsToLoad.length === 0) return
+        (n) =>
+          n.type === "collection" &&
+          n.expanded &&
+          this.pageCursors[n.collectionName!]
+      );
+      if (collectionsToLoad.length === 0) return;
 
-      this.loadingMore = true
+      this.loadingMore = true;
 
       for (const collectionNode of collectionsToLoad) {
-        const name = collectionNode.collectionName!
-        const cursor = this.pageCursors[name]!
+        const name = collectionNode.collectionName!;
+        const cursor = this.pageCursors[name]!;
         try {
-          const result = await this.connection.selectTop(name, cursor, PAGE_SIZE, [], [])
-          const rows = result.result || []
+          const result = await this.connection.selectTop(
+            name,
+            cursor,
+            PAGE_SIZE,
+            [],
+            []
+          );
+          const rows = result.result || [];
           if (rows.length === 0) {
-            this.pageCursors[name] = null
-            continue
+            this.pageCursors[name] = null;
+            continue;
           }
-          const newDocs = rows.map((row: any) => this.makeDocumentNode(name, row))
-          const existing = collectionNode.children || []
-          collectionNode.children = [...existing, ...newDocs]
-          collectionNode.childCount = collectionNode.children.length
-          this.pageCursors[name] = result.pageState || null
+          const newDocs = rows.map((row: any) =>
+            this.makeDocumentNode(name, row)
+          );
+          const existing = collectionNode.children || [];
+          collectionNode.children = [...existing, ...newDocs];
+          collectionNode.childCount = collectionNode.children.length;
+          this.pageCursors[name] = result.pageState || null;
 
           // Build flat list: each new doc then its field children, batch insert once
-          const flatNodes: FirestoreTreeNode[] = []
+          const flatNodes: FirestoreTreeNode[] = [];
           for (const doc of newDocs) {
-            flatNodes.push(doc)
+            flatNodes.push(doc);
             if (doc.children && doc.children.length > 0) {
               for (const field of doc.children) {
-                flatNodes.push(field)
+                flatNodes.push(field);
               }
             }
           }
-          this.insertNodesAfter(collectionNode, flatNodes)
+          this.insertNodesAfter(collectionNode, flatNodes);
         } catch (err: any) {
-          this.error = err.message || 'Failed to load more'
+          this.error = err.message || "Failed to load more";
         }
       }
 
-      this.loadingMore = false
-      this.$forceUpdate()
+      this.loadingMore = false;
+      this.$forceUpdate();
     },
 
     collapseAll() {
       for (const node of this.nodes) {
-        node.expanded = false
-        this.updateNodeState(node)
+        node.expanded = false;
+        this.updateNodeState(node);
         if (node.children) {
           for (const child of node.children) {
-            child.expanded = false
+            child.expanded = false;
           }
         }
       }
-      this.$forceUpdate()
+      this.$forceUpdate();
     },
 
-    handleEdit(node: FirestoreTreeNode, newValue: unknown, done: (success: boolean) => void) {
+    handleEdit(
+      node: FirestoreTreeNode,
+      newValue: unknown,
+      done: (success: boolean) => void
+    ) {
       if (!node.docId || !node.collectionName) {
-        done(false)
-        return
+        done(false);
+        return;
       }
 
       const changes = {
-        updates: [{
-          table: node.collectionName,
-          column: node.label,
-          value: newValue,
-          primaryKeys: [{ column: '__name__', value: node.docId }],
-        }],
+        updates: [
+          {
+            table: node.collectionName,
+            column: node.label,
+            value: newValue,
+            primaryKeys: [{ column: "__name__", value: node.docId }],
+          },
+        ],
         inserts: [],
         deletes: [],
-      }
+      };
 
       this.connection
         .applyChanges(changes)
         .then(() => {
-          node.value = newValue
-          node.displayValue =
-            newValue === null || newValue === undefined
-              ? 'null'
-              : typeof newValue === 'object'
-                ? JSON.stringify(newValue)
-                : String(newValue)
-          done(true)
+          node.value = newValue;
+          node.displayValue = this.getDisplayValue(newValue);
+          done(true);
         })
         .catch(() => {
-          done(false)
-        })
+          done(false);
+        });
     },
 
     insertNodesAfter(parent: FirestoreTreeNode, newNodes: FirestoreTreeNode[]) {
-      const parentIdx = this.nodes.findIndex(n => n.id === parent.id)
+      const parentIdx = this.nodes.findIndex((n) => n.id === parent.id);
       if (parentIdx < 0) {
-        this.nodes.push(...newNodes)
-        return
+        this.nodes.push(...newNodes);
+        return;
       }
-      let insertAfter = parentIdx
+      let insertAfter = parentIdx;
       for (let i = parentIdx + 1; i < this.nodes.length; i++) {
-        const n = this.nodes[i]
-        let ancestorId = n.parentId
+        const n = this.nodes[i];
+        let ancestorId = n.parentId;
         while (ancestorId) {
           if (ancestorId === parent.id) {
-            insertAfter = i
-            break
+            insertAfter = i;
+            break;
           }
-          const ancestor = this.nodes.find(a => a.id === ancestorId)
-          ancestorId = ancestor?.parentId
+          const ancestor = this.nodes.find((a) => a.id === ancestorId);
+          ancestorId = ancestor?.parentId;
         }
       }
-      this.nodes.splice(insertAfter + 1, 0, ...newNodes)
+      this.nodes.splice(insertAfter + 1, 0, ...newNodes);
     },
 
     isNodeVisible(node: FirestoreTreeNode): boolean {
-      if (node.level === 0) return true
+      if (node.level === 0) return true;
 
-      let currentId: string | undefined = node.parentId
+      let currentId: string | undefined = node.parentId;
       while (currentId) {
-        const ancestor = this.nodes.find((n) => n.id === currentId)
-        if (!ancestor || !ancestor.expanded) return false
-        currentId = ancestor.parentId
+        const ancestor = this.nodes.find((n) => n.id === currentId);
+        if (!ancestor || !ancestor.expanded) return false;
+        currentId = ancestor.parentId;
       }
-      return true
+      return true;
     },
 
     updateNodeState(node: FirestoreTreeNode) {
       if (!this.nodeStates[node.id]) {
-        this.$set(this.nodeStates, node.id, { expanded: node.expanded })
+        this.$set(this.nodeStates, node.id, { expanded: node.expanded });
       } else {
-        this.nodeStates[node.id].expanded = node.expanded
+        this.nodeStates[node.id].expanded = node.expanded;
       }
+    },
+
+    getDisplayValue(rawValue: unknown): string {
+      const isTimestamp = (v: any) =>
+        v &&
+        typeof v === "object" &&
+        typeof v.toDate === "function" &&
+        typeof v.seconds === "number";
+      const isGeoPoint = (v: any) =>
+        v &&
+        typeof v === "object" &&
+        typeof v.latitude === "number" &&
+        typeof v.longitude === "number";
+
+      if (rawValue === null || rawValue === undefined) {
+        return "null";
+      }
+
+      if (rawValue instanceof Date) {
+        return rawValue.toISOString();
+      }
+
+      if (isTimestamp(rawValue)) {
+        return (rawValue as any).toDate().toISOString();
+      }
+
+      if (isGeoPoint(rawValue)) {
+        return `${(rawValue as any).latitude}, ${(rawValue as any).longitude}`;
+      }
+
+      if (typeof rawValue === "object") {
+        try {
+          const serialized = JSON.stringify(rawValue);
+          return serialized.length > 80
+            ? serialized.slice(0, 80) + "\u2026"
+            : serialized;
+        } catch {
+          return "[Object]";
+        }
+      }
+
+      return String(rawValue);
     },
 
     handleKeydown(e: KeyboardEvent) {
-      const idx = this.focusedIndex
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        this.focusedIndex = Math.min(idx + 1, this.displayNodes.length - 1)
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        this.focusedIndex = Math.max(idx - 1, 0)
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault()
-        const node = this.displayNodes[idx]
-        if (node && !node.expanded && node.type !== 'field') {
-          this.handleExpand(e as any, node)
+      const idx = this.focusedIndex;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        this.focusedIndex = Math.min(idx + 1, this.displayNodes.length - 1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        this.focusedIndex = Math.max(idx - 1, 0);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const node = this.displayNodes[idx];
+        if (node && !node.expanded && node.type !== "field") {
+          this.handleExpand(e as any, node);
         }
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        const node = this.displayNodes[idx]
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const node = this.displayNodes[idx];
         if (node && node.expanded) {
-          this.handleExpand(e as any, node)
+          this.handleExpand(e as any, node);
         }
       }
     },
-
   },
-})
+});
 </script>
 
 <style lang="scss" scoped>
-@use 'sass:color';
-@import '../../assets/styles/app/_variables';
+@use "sass:color";
+@import "../../assets/styles/app/_variables";
 
 .firestore-tree-view {
   display: flex;
@@ -624,12 +764,21 @@ export default Vue.extend({
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
