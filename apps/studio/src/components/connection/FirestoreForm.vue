@@ -4,18 +4,18 @@
       <i class="material-icons">info</i>
       <span>
         Firestore support is in beta. Connect using a
-        <a href="https://firebase.google.com/docs/admin/setup#initialize-sdk" target="_blank">service account</a>
-        or Application Default Credentials.
+        <a
+          href="https://firebase.google.com/docs/admin/setup#initialize-sdk"
+          target="_blank"
+          >service account</a
+        >
+        , Application Default Credentials, or the Firebase Emulator.
       </span>
     </div>
 
     <div class="form-group">
       <label for="authType">Authentication Method</label>
-      <select
-        id="authType"
-        class="form-control"
-        v-model="authType"
-      >
+      <select id="authType" class="form-control" v-model="authType">
         <option v-for="t in authTypes" :key="t.value" :value="t.value">
           {{ t.name }}
         </option>
@@ -32,12 +32,15 @@
         class="form-control json-textarea"
         v-model="serviceAccountJson"
         @blur="onJsonBlur"
-        placeholder='Paste your service account JSON key here...'
+        placeholder="Paste your service account JSON key here..."
         rows="6"
       ></textarea>
       <small class="form-text text-muted">
         Paste the entire JSON key file contents. Get it from
-        <a href="https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk" target="_blank">
+        <a
+          href="https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk"
+          target="_blank"
+        >
           Firebase Console &rarr; Service Accounts
         </a>
       </small>
@@ -57,12 +60,30 @@
         placeholder="/path/to/service-account-key.json"
       />
       <small class="form-text text-muted">
-        Provide the file path to your service account key JSON. Filling this clears the JSON field above.
+        Provide the file path to your service account key JSON. Filling this
+        clears the JSON field above.
+      </small>
+    </div>
+
+    <div v-if="authType === 'emulator'" class="form-group">
+      <label for="emulatorHost">Emulator Host</label>
+      <input
+        id="emulatorHost"
+        type="text"
+        class="form-control"
+        v-model="emulatorHost"
+        placeholder="localhost:8080"
+      />
+      <small class="form-text text-muted">
+        Host and port for the Firestore emulator. Firebase Auth emulator uses
+        the same host on port 9099.
       </small>
     </div>
 
     <div class="form-group">
-      <label for="projectId">Project ID <small>(optional override)</small></label>
+      <label for="projectId"
+        >Project ID <small>(optional override)</small></label
+      >
       <input
         id="projectId"
         type="text"
@@ -85,32 +106,33 @@
         placeholder="(default)"
       />
       <small class="form-text text-muted">
-        Leave as <code>(default)</code> for the default database, or enter a named database ID.
+        Leave as <code>(default)</code> for the default database, or enter a
+        named database ID.
       </small>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { FirestoreAuthType } from '@/lib/db/types'
+import { FirestoreAuthType } from "@/lib/db/types";
 
 function firestoreOption(key: string) {
   return {
     get(this: any) {
-      const defaults: Record<string, string> = { databaseId: '(default)' }
-      return this.config.firestoreOptions?.[key] ?? defaults[key] ?? ''
+      const defaults: Record<string, string> = { databaseId: "(default)" };
+      return this.config.firestoreOptions?.[key] ?? defaults[key] ?? "";
     },
     set(this: any, value: string) {
-      this.$set(this.config, 'firestoreOptions', {
+      this.$set(this.config, "firestoreOptions", {
         ...this.config.firestoreOptions,
         [key]: value,
-      })
+      });
     },
-  }
+  };
 }
 
 export default {
-  name: 'FirestoreForm',
+  name: "FirestoreForm",
   props: {
     config: {
       type: Object,
@@ -124,49 +146,58 @@ export default {
   data() {
     return {
       authTypes: [
-        { name: 'Service Account Key', value: FirestoreAuthType.ServiceAccount },
-        { name: 'Application Default Credentials', value: FirestoreAuthType.ApplicationDefault },
+        {
+          name: "Service Account Key",
+          value: FirestoreAuthType.ServiceAccount,
+        },
+        {
+          name: "Application Default Credentials",
+          value: FirestoreAuthType.ApplicationDefault,
+        },
+        { name: "Firebase Emulator", value: FirestoreAuthType.Emulator },
       ],
-    }
+    };
   },
   computed: {
-    authType: firestoreOption('authType'),
-    serviceAccountJson: firestoreOption('serviceAccountJson'),
-    serviceAccountPath: firestoreOption('serviceAccountPath'),
-    projectId: firestoreOption('projectId'),
-    databaseId: firestoreOption('databaseId'),
+    authType: firestoreOption("authType"),
+    serviceAccountJson: firestoreOption("serviceAccountJson"),
+    serviceAccountPath: firestoreOption("serviceAccountPath"),
+    emulatorHost: firestoreOption("emulatorHost"),
+    projectId: firestoreOption("projectId"),
+    databaseId: firestoreOption("databaseId"),
   },
   mounted() {
     if (!this.config.firestoreOptions?.authType) {
-      this.$set(this.config, 'firestoreOptions', {
+      this.$set(this.config, "firestoreOptions", {
         authType: FirestoreAuthType.ServiceAccount,
-        serviceAccountJson: '',
-        serviceAccountPath: '',
-        projectId: '',
-        databaseId: '(default)',
-      })
+        serviceAccountJson: "",
+        serviceAccountPath: "",
+        emulatorHost: "localhost:8080",
+        projectId: "",
+        databaseId: "(default)",
+      });
     }
   },
   methods: {
     // clear opposing field on blur to avoid data loss
     onJsonBlur() {
       if (this.serviceAccountJson?.trim()) {
-        this.$set(this.config, 'firestoreOptions', {
+        this.$set(this.config, "firestoreOptions", {
           ...this.config.firestoreOptions,
-          serviceAccountPath: '',
-        })
+          serviceAccountPath: "",
+        });
       }
     },
     onPathBlur() {
       if (this.serviceAccountPath?.trim()) {
-        this.$set(this.config, 'firestoreOptions', {
+        this.$set(this.config, "firestoreOptions", {
           ...this.config.firestoreOptions,
-          serviceAccountJson: '',
-        })
+          serviceAccountJson: "",
+        });
       }
     },
   },
-}
+};
 </script>
 
 <style scoped>

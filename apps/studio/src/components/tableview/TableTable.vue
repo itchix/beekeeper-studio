@@ -434,6 +434,7 @@ export default Vue.extend({
 
       forceRedraw: false,
       rawPage: 1,
+      lastSortKey: null,
       initialized: false,
       internalColumnPrefix: "__beekeeper_internal_",
       internalIndexColumn: "__beekeeper_internal_index",
@@ -2019,6 +2020,15 @@ export default Vue.extend({
 
       if (params.size) {
         limit = params.size;
+      }
+
+      // Reset cursor states when sort order changes (cursor from a different order is invalid).
+      if (!usesOffsetPagination) {
+        const sortKey = JSON.stringify(params.sort ?? null);
+        if (sortKey !== this.lastSortKey) {
+          this.lastSortKey = sortKey;
+          this.paginationStates = [null];
+        }
       }
 
       // if (usesOffsetPagination) then use pages otherwise hit the pageState array

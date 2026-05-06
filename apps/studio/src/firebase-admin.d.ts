@@ -1,13 +1,21 @@
-declare module 'firebase-admin/app' {
-  export function initializeApp(options?: Record<string, unknown>, name?: string): any;
+declare module "firebase-admin/app" {
+  export function initializeApp(
+    options?: Record<string, unknown>,
+    name?: string
+  ): any;
   export function cert(serviceAccount: string | Record<string, unknown>): any;
   export function applicationDefault(): any;
   export function deleteApp(app: any): Promise<void>;
   export const SDK_VERSION: string;
 }
 
-declare module 'firebase-admin/firestore' {
+declare module "firebase-admin/firestore" {
   export function getFirestore(app?: any, databaseId?: string): any;
+  export function initializeFirestore(
+    app: any,
+    settings?: { host?: string; ssl?: boolean; preferRest?: boolean },
+    databaseId?: string
+  ): any;
 
   export class Timestamp {
     readonly seconds: number;
@@ -27,6 +35,6 @@ declare module 'firebase-admin/firestore' {
   }
 }
 
-declare module 'firebase-admin/auth' {
+declare module "firebase-admin/auth" {
   export function getAuth(app: any): any;
 }

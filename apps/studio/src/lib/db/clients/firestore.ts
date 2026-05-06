@@ -61,6 +61,8 @@ type FirestoreQueryResult = BaseQueryResult & {
 const firestoreContext: AppContextProvider = NoOpContextProvider;
 
 export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
+  private static emulatorEnvLock: Promise<void> = Promise.resolve();
+
   private app: any = null;
   private firestoreDb: Firestore | null = null;
   private authClient: any = null;
@@ -86,6 +88,85 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     this.firestoreOptions = server?.config?.firestoreOptions || {};
   }
 
+  private resetTypeCachesForTable(table: string): void {
+    const columnPrefix = `${table}.`;
+
+    for (const fieldSet of [
+      this.timestampColumns,
+      this.geopointColumns,
+      this.referenceColumns,
+    ]) {
+      for (const key of Array.from(fieldSet)) {
+        if (key.startsWith(columnPrefix)) {
+          fieldSet.delete(key);
+        }
+      }
+    }
+  }
+
+  private async withEmulatorEnv<T>(
+    options: { auth?: boolean; firestore?: boolean },
+    fn: () => Promise<T>
+  ): Promise<T> {
+    if (this.firestoreOptions?.authType !== FirestoreAuthType.Emulator) {
+      return fn();
+    }
+
+    const run = async () => {
+      const emulatorHost =
+        this.firestoreOptions?.emulatorHost || "localhost:8080";
+      const emulatorHostname = emulatorHost.split(":")[0] || "localhost";
+      const previousAuthHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+      const previousFirestoreHost = process.env.FIRESTORE_EMULATOR_HOST;
+
+      if (options.auth) {
+        process.env.FIREBASE_AUTH_EMULATOR_HOST = `${emulatorHostname}:9099`;
+      }
+
+      if (options.firestore) {
+        process.env.FIRESTORE_EMULATOR_HOST = emulatorHost;
+      }
+
+      try {
+        return await fn();
+      } finally {
+        if (!options.auth || previousAuthHost == null) {
+          delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+        } else {
+          process.env.FIREBASE_AUTH_EMULATOR_HOST = previousAuthHost;
+        }
+
+        if (!options.firestore || previousFirestoreHost == null) {
+          delete process.env.FIRESTORE_EMULATOR_HOST;
+        } else {
+          process.env.FIRESTORE_EMULATOR_HOST = previousFirestoreHost;
+        }
+      }
+    };
+
+    const pending = FirestoreClient.emulatorEnvLock.then(run);
+    FirestoreClient.emulatorEnvLock = pending.then(
+      () => undefined,
+      () => undefined
+    );
+
+    return pending;
+  }
+
+  private async withAuthEmulatorEnv<T>(fn: () => Promise<T>): Promise<T> {
+    return this.withEmulatorEnv({ auth: true }, fn);
+  }
+
+  private requireAuthClient(): any {
+    if (!this.authClient) {
+      throw new Error(
+        "Firebase Auth is not available for this connection. Check emulator settings or IAM permissions."
+      );
+    }
+
+    return this.authClient;
+  }
+
   async connect(): Promise<void> {
     await super.connect();
 
@@ -99,16 +180,17 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
     const authType =
       this.firestoreOptions?.authType || FirestoreAuthType.ServiceAccount;
+    const databaseId = this.firestoreOptions?.databaseId || "(default)";
+    let firestoreSettings: { host: string; ssl: false } | undefined;
 
     const appName = `bks-firestore-${Date.now()}`;
 
     if (authType === FirestoreAuthType.Emulator) {
-      const emulatorHost = this.firestoreOptions?.emulatorHost || 'localhost:8080';
-      const [emulatorHostname] = emulatorHost.split(':');
-      process.env.FIRESTORE_EMULATOR_HOST = emulatorHost;
-      process.env.FIREBASE_AUTH_EMULATOR_HOST = `${emulatorHostname}:9099`;
+      const emulatorHost =
+        this.firestoreOptions?.emulatorHost || "localhost:8080";
+      firestoreSettings = { host: emulatorHost, ssl: false };
       this.app = initializeApp(
-        { projectId: this.firestoreOptions?.projectId || 'demo-project' },
+        { projectId: this.firestoreOptions?.projectId || "demo-project" },
         appName
       );
     } else if (authType === FirestoreAuthType.ApplicationDefault) {
@@ -158,17 +240,36 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
 
     try {
-      this.authClient = getAuth(this.app as any);
-    } catch (authErr) {
-      log.warn("Firebase Auth initialization failed:", authErr);
-      this.authClient = null;
-    }
+      await this.withEmulatorEnv(
+        {
+          auth: authType === FirestoreAuthType.Emulator,
+          firestore: false,
+        },
+        async () => {
+          try {
+            this.authClient = getAuth(this.app as any);
+          } catch (authErr) {
+            log.warn("Firebase Auth initialization failed:", authErr);
+            this.authClient = null;
+          }
 
-    try {
-      const databaseId = this.firestoreOptions?.databaseId || "(default)";
-      this.firestoreDb = getFirestore(this.app, databaseId);
+          if (firestoreSettings) {
+            const { Firestore: GoogleCloudFirestore } = await import(
+              "@google-cloud/firestore"
+            );
+            this.firestoreDb = new GoogleCloudFirestore({
+              projectId: this.firestoreOptions?.projectId || "demo-project",
+              databaseId,
+              host: firestoreSettings.host,
+              ssl: firestoreSettings.ssl,
+            });
+          } else {
+            this.firestoreDb = getFirestore(this.app, databaseId);
+          }
 
-      await this.firestoreClient.listCollections();
+          await this.firestoreClient.listCollections();
+        }
+      );
 
       this.database.connected = true;
       log.info("Connected to Firestore successfully");
@@ -180,12 +281,19 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       }
       this.app = null;
       this.firestoreDb = null;
+      this.authClient = null;
       throw err;
     }
   }
 
   async disconnect(): Promise<void> {
     try {
+      const maybeTerminable = this.firestoreDb as Firestore & {
+        terminate?: () => Promise<void>;
+      };
+      if (maybeTerminable?.terminate) {
+        await maybeTerminable.terminate();
+      }
       if (this.app) {
         await this.deleteAppFn?.(this.app);
       }
@@ -196,6 +304,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     this.firestoreDb = null;
     this.authClient = null;
     this.database.connected = false;
+    this.cachedFirebaseClasses = null;
     await super.disconnect();
   }
 
@@ -252,6 +361,8 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     schema?: string
   ): Promise<ExtendedTableColumn[]> {
     if (!table) return [];
+
+    this.resetTypeCachesForTable(table);
 
     const snapshot = await this.firestoreClient
       .collection(table)
@@ -411,7 +522,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
 
   async selectTop(
     table: string,
-    offset: number,
+    offset: number | string | null,
     limit: number,
     orderBy: OrderBy[],
     filters: string | TableFilter[],
@@ -444,7 +555,7 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
             if (parsed) {
               if (parsed.op === "startsWith") {
                 query = query.where(parsed.field, ">=", parsed.value);
-                query = query.where(parsed.field, "<", parsed.value + "");
+                query = query.where(parsed.field, "<", parsed.value + "\uf8ff");
                 inequalityField = parsed.field;
               } else {
                 query = query.where(parsed.field, parsed.op, parsed.value);
@@ -472,9 +583,27 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     }
 
     if (inequalityField) {
-      // Firestore requires the first orderBy to match inequality filter field.
-      // Add __name__ as secondary tiebreaker for stable pagination.
-      query = query.orderBy(inequalityField, "asc");
+      // Firestore requires the first orderBy to match the inequality filter field.
+      // Respect the user's direction for that field if they specified it explicitly.
+      const userInequalityOrder = orderBy?.find(
+        (o) => o.field === inequalityField
+      );
+      const inequalityDir = userInequalityOrder
+        ? (userInequalityOrder.dir || "ASC").toUpperCase() === "DESC"
+          ? "desc"
+          : "asc"
+        : "asc";
+      query = query.orderBy(inequalityField, inequalityDir);
+      // Append any additional user orderBy clauses (excluding the inequality field, already added).
+      if (orderBy && orderBy.length > 0) {
+        for (const order of orderBy) {
+          if (order.field === inequalityField || order.field === "__name__")
+            continue;
+          const dir =
+            (order.dir || "ASC").toUpperCase() === "DESC" ? "desc" : "asc";
+          query = query.orderBy(order.field, dir);
+        }
+      }
       query = query.orderBy("__name__", "asc");
     } else if (orderBy && orderBy.length > 0) {
       for (const order of orderBy) {
@@ -1360,28 +1489,14 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     TimestampClass: any,
     GeoPointClass: any
   ): any {
+    void TimestampClass;
+    void GeoPointClass;
+
     if (value === null || value === undefined) {
       return null;
     }
 
     if (typeof value === "string") {
-      const dateValue = this.parseDateString(value);
-      if (dateValue) {
-        if (TimestampClass) {
-          return TimestampClass.fromDate(dateValue);
-        }
-        // Firestore SDK auto-converts Date to Timestamp
-        return dateValue;
-      }
-
-      const geoMatch = value.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
-      if (geoMatch && GeoPointClass) {
-        return new GeoPointClass(
-          parseFloat(geoMatch[1]),
-          parseFloat(geoMatch[2])
-        );
-      }
-
       try {
         const parsed = JSON.parse(value);
         if (typeof parsed === "object" && parsed !== null) {
@@ -1439,7 +1554,9 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
       if (parts.length >= 2 && parts.length % 2 === 0) {
         try {
           return this.firestoreClient.doc(value);
-        } catch {}
+        } catch (_err) {
+          return value;
+        }
       }
     }
 
@@ -1629,7 +1746,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   async listAuthUsers(
     pageToken?: string
   ): Promise<{ users: FirestoreAuthUser[]; nextPageToken?: string }> {
-    const result = await this.authClient.listUsers(1000, pageToken);
+    const result = await this.withAuthEmulatorEnv(async () => {
+      const authClient = this.requireAuthClient();
+      return authClient.listUsers(1000, pageToken);
+    });
+
     return {
       users: result.users.map((u: any) => ({
         uid: u.uid,
@@ -1647,7 +1768,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   async createAuthUser(
     data: CreateFirestoreAuthUserRequest
   ): Promise<FirestoreAuthUser> {
-    const u = await this.authClient.createUser(data);
+    const u = await this.withAuthEmulatorEnv(async () => {
+      const authClient = this.requireAuthClient();
+      return authClient.createUser(data);
+    });
+
     return {
       uid: u.uid,
       email: u.email ?? "",
@@ -1663,7 +1788,11 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
     uid: string,
     data: UpdateFirestoreAuthUserRequest
   ): Promise<FirestoreAuthUser> {
-    const u = await this.authClient.updateUser(uid, data);
+    const u = await this.withAuthEmulatorEnv(async () => {
+      const authClient = this.requireAuthClient();
+      return authClient.updateUser(uid, data);
+    });
+
     return {
       uid: u.uid,
       email: u.email ?? "",
@@ -1676,6 +1805,9 @@ export class FirestoreClient extends BasicDatabaseClient<FirestoreQueryResult> {
   }
 
   async deleteAuthUser(uid: string): Promise<void> {
-    await this.authClient.deleteUser(uid);
+    await this.withAuthEmulatorEnv(async () => {
+      const authClient = this.requireAuthClient();
+      await authClient.deleteUser(uid);
+    });
   }
 }
