@@ -113,6 +113,7 @@ export default Vue.extend({
     rows: { type: Array, default: () => [] },
     fields: { type: Array, default: () => [] },
     mode: { type: String as () => "explorer" | "results", default: "results" },
+    tableName: { type: String, default: "" },
   },
   data() {
     return {
@@ -212,7 +213,8 @@ export default Vue.extend({
             ? namePath.split("/")
             : [String(namePath)];
         const docId = parts.length > 1 ? parts.slice(1).join("/") : parts[0];
-        const collectionName = parts.length > 1 ? parts[0] : undefined;
+        const collectionName =
+          parts.length > 1 ? parts[0] : this.tableName || undefined;
         const docNodeId = `doc:${docId}`;
 
         const children: FirestoreTreeNode[] = [];
@@ -521,6 +523,24 @@ export default Vue.extend({
         return;
       }
 
+      const oldValue = node.value;
+      const shouldStageEdit = !!this.$listeners["field-saved"];
+
+      if (shouldStageEdit) {
+        node.value = newValue;
+        node.displayValue = this.getDisplayValue(newValue);
+        this.$emit("field-saved", {
+          collectionName: node.collectionName,
+          docId: node.docId,
+          field: node.label,
+          fieldType: node.fieldType,
+          oldValue,
+          value: newValue,
+        });
+        done(true);
+        return;
+      }
+
       const changes = {
         updates: [
           {
@@ -539,6 +559,14 @@ export default Vue.extend({
         .then(() => {
           node.value = newValue;
           node.displayValue = this.getDisplayValue(newValue);
+          this.$emit("field-saved", {
+            collectionName: node.collectionName,
+            docId: node.docId,
+            field: node.label,
+            fieldType: node.fieldType,
+            oldValue,
+            value: newValue,
+          });
           done(true);
         })
         .catch(() => {

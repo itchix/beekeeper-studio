@@ -20,10 +20,7 @@
         @input="handleRowFilterBuilderInput"
         @submit="triggerFilter"
       />
-      <div
-        v-show="isEmpty && !dataLoading"
-        class="empty-placeholder"
-      >
+      <div v-show="isEmpty && !dataLoading" class="empty-placeholder">
         No Data
       </div>
       <!-- Tree view for Firestore -->
@@ -33,14 +30,13 @@
           :rows="data || []"
           :fields="treeFields"
           :mode="data && data.length > 0 ? 'results' : 'explorer'"
+          :table-name="table.name"
           style="flex: 1; min-height: 0"
+          @field-saved="onTreeFieldSaved"
         />
       </div>
       <!-- Grid view (Tabulator) -->
-      <div
-        v-show="dataLoading"
-        class="empty-placeholder"
-      >
+      <div v-show="dataLoading" class="empty-placeholder">
         <loading-spinner :size="20" /> Loading...
       </div>
       <div
@@ -1097,7 +1093,11 @@ export default Vue.extend({
       const el = document.activeElement;
       if (!el) return false;
       const tag = (el as HTMLElement).tagName.toLowerCase();
-      return tag === 'input' || tag === 'textarea' || (el as HTMLElement).getAttribute('contenteditable') === 'true';
+      return (
+        tag === "input" ||
+        tag === "textarea" ||
+        (el as HTMLElement).getAttribute("contenteditable") === "true"
+      );
     },
     async navigatePage(dir: "next" | "prev" | "first" | "last") {
       const focusingTable = this.tabulator.element.contains(
@@ -1896,9 +1896,10 @@ export default Vue.extend({
           replaceData = true;
           this.addedCol = false;
         } else if (this.hasPendingUpdates) {
-          this.tabulator.clearCellEdited();
-          this.tabulator.updateData(this.convertUpdateResult(result));
+          this.tabulator?.clearCellEdited();
+          this.tabulator?.updateData(this.convertUpdateResult(result));
           this.pendingChanges.updates.forEach((edit) => {
+            if (!edit.cell) return;
             edit.cell.getElement().classList.remove("edited");
             edit.cell.getElement().classList.add("edit-success");
             setTimeout(() => {
@@ -1922,7 +1923,7 @@ export default Vue.extend({
         this.resetPendingChanges();
       } catch (ex) {
         this.pendingChanges.updates.forEach((edit) => {
-          edit.cell.getElement().classList.add("edit-error");
+          edit.cell?.getElement().classList.add("edit-error");
         });
 
         this.pendingChanges.inserts.forEach((insert) => {
@@ -1963,6 +1964,22 @@ export default Vue.extend({
       this.resetPendingChanges();
     },
     discardColumnUpdate(pendingUpdate) {
+      if (!pendingUpdate.cell) {
+        const docId = pendingUpdate.primaryKeys?.find(
+          (pk) => pk.column === "__name__"
+        )?.value;
+
+        if (docId) {
+          this.updateLocalFirestoreRow(
+            docId,
+            pendingUpdate.column,
+            pendingUpdate.oldValue,
+            this.table.name
+          );
+        }
+        return;
+      }
+
       pendingUpdate.cell.setValue(pendingUpdate.oldValue);
       pendingUpdate.cell.getElement().classList.remove("edited");
       pendingUpdate.cell.getElement().classList.remove("edit-error");
@@ -2019,7 +2036,7 @@ export default Vue.extend({
       this.paginationStates = [null];
     },
     dataFetch(_url, _config, params) {
-      this.dataLoading = true
+      this.dataLoading = true;
       // this conforms to the Tabulator API
       // for ajax requests. Except we're just calling the database.
       // we're using paging so requires page info
@@ -2164,7 +2181,7 @@ export default Vue.extend({
               this.tabulator.clearData();
             });
             reject(error.message);
-            this.dataLoading = false
+            this.dataLoading = false;
           } finally {
             if (!this.active) {
               this.forceRedraw = true;
@@ -2211,6 +2228,119 @@ export default Vue.extend({
         this.table.schema
       );
       this.primaryKeys = rawPrimaryKeys.map((key) => key.columnName);
+    },
+    onTreeFieldSaved({
+      collectionName,
+      docId,
+      field,
+      fieldType,
+      oldValue,
+      value,
+    }: {
+      collectionName: string;
+      docId: string;
+      field: string;
+      fieldType?: string;
+      oldValue: unknown;
+      value: unknown;
+    }) {
+      const row = this.updateLocalFirestoreRow(
+        docId,
+        field,
+        value,
+        collectionName
+      );
+      if (!row) return;
+
+      const key = `${docId}-${field}`;
+      const currentEdit = _.find(this.pendingChanges.updates, { key });
+
+      if (currentEdit && currentEdit.oldValue == value) {
+        this.$set(
+          this.pendingChanges,
+          "updates",
+          _.without(this.pendingChanges.updates, currentEdit)
+        );
+        this.updateJsonViewerSidebar();
+        return;
+      }
+
+      if (currentEdit) {
+        currentEdit.value = value;
+        this.updateJsonViewerSidebar();
+        return;
+      }
+
+      const column = this.table.columns.find((c) => c.columnName === field);
+      const payload = {
+        key,
+        table: this.table.name,
+        schema: this.table.schema,
+        dataset: this.dialectData.requireDataset ? this.database : null,
+        column: field,
+        columnType: column ? column.dataType : fieldType,
+        columnObject: column,
+        primaryKeys: [{ column: "__name__", value: docId }],
+        oldValue,
+        value,
+        rowIndex: row.rowIndex,
+      };
+
+      this.$set(this.pendingChanges, "updates", [
+        ..._.reject(this.pendingChanges.updates, { key }),
+        payload,
+      ]);
+      this.updateJsonViewerSidebar();
+    },
+    matchesFirestoreDocRow(
+      row: Record<string, any>,
+      docId: string,
+      collectionName?: string
+    ) {
+      const fullDocPath = collectionName ? `${collectionName}/${docId}` : docId;
+      return (
+        row.__name__ === fullDocPath ||
+        row.__name__ === docId ||
+        row.id === docId
+      );
+    },
+    updateLocalFirestoreRow(
+      docId: string,
+      field: string,
+      value: unknown,
+      collectionName?: string
+    ) {
+      if (!this.data) return null;
+
+      const rows = this.data as any[];
+      const idx = rows.findIndex((row: any) =>
+        this.matchesFirestoreDocRow(row, docId, collectionName)
+      );
+
+      if (idx === -1) return null;
+
+      const updated = [...rows];
+      updated[idx] = { ...updated[idx], [field]: value };
+      (this as any).data = Object.freeze(updated);
+
+      const primaryValues = (this.primaryKeys || []).map(
+        (key: string) => updated[idx][key]
+      );
+      const internalIndex = primaryValues.join(",");
+
+      if (this.tabulator && internalIndex) {
+        this.tabulator.updateData([
+          {
+            [this.internalIndexColumn]: internalIndex,
+            [field]: value,
+          },
+        ]);
+      }
+
+      return {
+        row: updated[idx],
+        rowIndex: this.limit * (this.page - 1) + idx + 1,
+      };
     },
     async refreshTable() {
       if (!this.tabulator) return;
