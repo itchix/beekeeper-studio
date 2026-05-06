@@ -20,7 +20,12 @@
         @input="handleRowFilterBuilderInput"
         @submit="triggerFilter"
       />
-      <div v-show="isEmpty" class="empty-placeholder">No Data</div>
+      <div
+        v-show="isEmpty && !dataLoading"
+        class="empty-placeholder"
+      >
+        No Data
+      </div>
       <!-- Tree view for Firestore -->
       <div v-if="isFirestore && viewMode === 'tree'" class="table-view-wrapper">
         <firestore-tree-view
@@ -32,6 +37,12 @@
         />
       </div>
       <!-- Grid view (Tabulator) -->
+      <div
+        v-show="dataLoading"
+        class="empty-placeholder"
+      >
+        <loading-spinner :size="20" /> Loading...
+      </div>
       <div
         v-show="!isFirestore || viewMode === 'grid'"
         class="table-view-wrapper"
@@ -330,6 +341,7 @@ import Statusbar from "../common/StatusBar.vue";
 import RowFilterBuilder from "./RowFilterBuilder.vue";
 import ColumnFilterModal from "./ColumnFilterModal.vue";
 import EditorModal from "./EditorModal.vue";
+import LoadingSpinner from "@/components/common/loading/LoadingSpinner.vue";
 import rawLog from "@bksLogger";
 import _ from "lodash";
 import TimeAgo from "javascript-time-ago";
@@ -395,6 +407,7 @@ export default Vue.extend({
     TableLength,
     RowFilterBuilder,
     EditorModal,
+    LoadingSpinner,
     FirestoreTreeView,
   },
   mixins: [data_converter, DataMutators, FkLinkMixin],
@@ -408,6 +421,7 @@ export default Vue.extend({
       columnsSet: false,
       tabulator: null,
       loading: false,
+      dataLoading: false,
       hasNextPage: false,
 
       // table data
@@ -1079,11 +1093,17 @@ export default Vue.extend({
       // do nothing?
       log.debug("tab pressed");
     },
+    isFocusingEditableElement() {
+      const el = document.activeElement;
+      if (!el) return false;
+      const tag = (el as HTMLElement).tagName.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || (el as HTMLElement).getAttribute('contenteditable') === 'true';
+    },
     async navigatePage(dir: "next" | "prev" | "first" | "last") {
       const focusingTable = this.tabulator.element.contains(
         document.activeElement
       );
-      if (!focusingTable) {
+      if (!focusingTable && !this.isFocusingEditableElement()) {
         if (dir === "next") {
           this.page++;
         } else if (dir === "prev") {
@@ -1999,6 +2019,7 @@ export default Vue.extend({
       this.paginationStates = [null];
     },
     dataFetch(_url, _config, params) {
+      this.dataLoading = true
       // this conforms to the Tabulator API
       // for ajax requests. Except we're just calling the database.
       // we're using paging so requires page info
@@ -2081,6 +2102,7 @@ export default Vue.extend({
               response.result.pop();
             }
             this.data = response.result;
+            this.dataLoading = false;
 
             if (
               _.xor(
@@ -2142,6 +2164,7 @@ export default Vue.extend({
               this.tabulator.clearData();
             });
             reject(error.message);
+            this.dataLoading = false
           } finally {
             if (!this.active) {
               this.forceRedraw = true;
