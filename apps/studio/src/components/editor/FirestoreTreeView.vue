@@ -370,7 +370,9 @@ export default Vue.extend({
         isGeoPoint(rawValue);
 
       let displayValue = "";
-      if (rawValue === null || rawValue === undefined) {
+      if (rawValue === undefined) {
+        displayValue = "undefined";
+      } else if (rawValue === null) {
         displayValue = "null";
       } else if (rawValue instanceof Date) {
         displayValue = rawValue.toISOString();
@@ -688,7 +690,11 @@ export default Vue.extend({
         typeof v.latitude === "number" &&
         typeof v.longitude === "number";
 
-      if (rawValue === null || rawValue === undefined) {
+      if (rawValue === undefined) {
+        return "undefined";
+      }
+
+      if (rawValue === null) {
         return "null";
       }
 
