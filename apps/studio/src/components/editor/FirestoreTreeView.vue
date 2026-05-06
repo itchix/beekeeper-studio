@@ -28,10 +28,12 @@
         </button>
         <button
           class="btn btn-flat btn-icon"
-          title="Collapse all"
-          @click="collapseAll"
+          :title="allExpanded ? 'Collapse all' : 'Expand all'"
+          @click="toggleAll"
         >
-          <i class="material-icons">unfold_less</i>
+          <i class="material-icons">{{
+            allExpanded ? "unfold_less" : "unfold_more"
+          }}</i>
         </button>
       </div>
     </div>
@@ -161,6 +163,15 @@ export default Vue.extend({
         }
       }
       return false;
+    },
+    allExpanded(): boolean {
+      const collapsibleNodes = this.nodes.filter(
+        (node) => node.type !== "field"
+      );
+      return (
+        collapsibleNodes.length > 0 &&
+        collapsibleNodes.every((node) => node.expanded)
+      );
     },
   },
   watch: {
@@ -520,6 +531,46 @@ export default Vue.extend({
         }
       }
       this.$forceUpdate();
+    },
+
+    async expandAll() {
+      const collectionsToLoad: FirestoreTreeNode[] = [];
+
+      for (const node of this.nodes) {
+        if (node.type === "field") continue;
+
+        node.expanded = true;
+        this.updateNodeState(node);
+
+        if (
+          node.type === "collection" &&
+          (!node.children || node.children.length === 0)
+        ) {
+          collectionsToLoad.push(node);
+        }
+      }
+
+      for (const collectionNode of collectionsToLoad) {
+        await this.loadDocuments(collectionNode);
+      }
+
+      for (const node of this.nodes) {
+        if (node.type === "field") continue;
+
+        node.expanded = true;
+        this.updateNodeState(node);
+      }
+
+      this.$forceUpdate();
+    },
+
+    async toggleAll() {
+      if (this.allExpanded) {
+        this.collapseAll();
+        return;
+      }
+
+      await this.expandAll();
     },
 
     handleEdit(
