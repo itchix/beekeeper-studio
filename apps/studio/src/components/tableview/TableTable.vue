@@ -379,6 +379,7 @@ import {
   resizeAllColumnsToFitContent,
   resizeAllColumnsToFitContentAction,
 } from "@/lib/menu/tableMenu";
+import { FIRESTORE_TYPES, FirestoreTypeDefinition } from "@/lib/db/firestoreTypes";
 import { tabulatorForTableData } from "@/common/tabulator";
 import { getFilters, setFilters } from "@/common/transport/TransportOpenTab";
 import {
@@ -859,6 +860,7 @@ export default Vue.extend({
           const menu = [
             this.openEditorMenu(cell),
             this.setAsNullMenuItem(range),
+            ...(this.isFirestore ? [this.firestoreChangeTypeMenuItem(cell)] : []),
             { separator: true },
             this.quickFilterMenuItem(cell),
             ...copyActionsMenu({
@@ -1318,6 +1320,23 @@ export default Vue.extend({
         },
       ];
     },
+    firestoreChangeTypeMenuItem(cell: CellComponent) {
+      const currentType = (cell.getColumn().getDefinition() as any).dataType as string | undefined;
+      return {
+        label: createMenuItem("Data Type"),
+        menu: FIRESTORE_TYPES.map((typeDef: FirestoreTypeDefinition) => ({
+          label: createMenuItem(
+            currentType === typeDef.key ? `✓ ${typeDef.label}` : typeDef.label
+          ),
+          action: () => this.firestoreChangeType(cell, typeDef),
+        })),
+      };
+    },
+
+    firestoreChangeType(cell: CellComponent, typeDef: FirestoreTypeDefinition) {
+      cell.setValue(typeDef.defaultValue());
+    },
+
     setAsNullMenuItem(range: RangeComponent) {
       const areAllCellsPrimarykey = range
         .getColumns()
