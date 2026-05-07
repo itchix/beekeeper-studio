@@ -603,7 +603,8 @@ export default Vue.extend({
     handleEdit(
       node: FirestoreTreeNode,
       newValue: unknown,
-      done: (success: boolean) => void
+      done: (success: boolean) => void,
+      newFieldType?: string
     ) {
       if (!node.docId || !node.collectionName) {
         done(false);
@@ -611,16 +612,18 @@ export default Vue.extend({
       }
 
       const oldValue = node.value;
+      const resolvedFieldType = newFieldType ?? node.fieldType;
       const shouldStageEdit = !!this.$listeners["field-saved"];
 
       if (shouldStageEdit) {
         node.value = newValue;
         node.displayValue = this.getDisplayValue(newValue);
+        if (newFieldType) node.fieldType = newFieldType;
         this.$emit("field-saved", {
           collectionName: node.collectionName,
           docId: node.docId,
           field: node.label,
-          fieldType: node.fieldType,
+          fieldType: resolvedFieldType,
           oldValue,
           value: newValue,
         });
@@ -646,11 +649,12 @@ export default Vue.extend({
         .then(() => {
           node.value = newValue;
           node.displayValue = this.getDisplayValue(newValue);
+          if (newFieldType) node.fieldType = newFieldType;
           this.$emit("field-saved", {
             collectionName: node.collectionName,
             docId: node.docId,
             field: node.label,
-            fieldType: node.fieldType,
+            fieldType: resolvedFieldType,
             oldValue,
             value: newValue,
           });

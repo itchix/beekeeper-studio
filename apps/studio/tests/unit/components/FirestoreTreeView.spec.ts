@@ -211,3 +211,51 @@ describe("FirestoreTreeView rows watcher deferral", () => {
     expect(vm.nodes.length).toBeGreaterThan(0);
   });
 });
+
+describe("FirestoreTreeView handleEdit with newFieldType", () => {
+  it("updates node.fieldType when newFieldType is provided via applyChanges path", async () => {
+    const mockConn = {
+      listTables: jest.fn().mockResolvedValue([]),
+      applyChanges: jest.fn().mockResolvedValue({}),
+    };
+    const wrapper = makeWrapper({ connection: mockConn });
+    const vm = wrapper.vm as any;
+
+    const node = {
+      id: "field:doc1.name",
+      type: "field",
+      label: "name",
+      docId: "doc1",
+      collectionName: "users",
+      value: "Alice",
+      displayValue: "Alice",
+      fieldType: "string",
+      level: 2,
+      expanded: false,
+      loading: false,
+      isEditable: true,
+    };
+
+    let savedFieldType: string | undefined;
+    vm.$on("field-saved", (payload: any) => {
+      savedFieldType = payload.fieldType;
+    });
+
+    vm.handleEdit(node, 42, (_success: boolean) => {}, "integer");
+
+    await vm.$nextTick();
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(mockConn.applyChanges).toHaveBeenCalledWith({
+      updates: [{
+        table: "users",
+        column: "name",
+        value: 42,
+        primaryKeys: [{ column: "__name__", value: "doc1" }],
+      }],
+      inserts: [],
+      deletes: [],
+    });
+    expect(node.fieldType).toBe("integer");
+  });
+});
