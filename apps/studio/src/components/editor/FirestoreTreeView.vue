@@ -65,7 +65,7 @@
         :data-sources="displayNodes"
         :data-component="TreeNode"
         :estimate-size="28"
-        :keeps="30"
+        :keeps="listKeeps"
         :extra-props="extraProps"
       />
       <div v-if="hasMore" class="tree-load-more">
@@ -128,7 +128,24 @@ export default Vue.extend({
       focusedIndex: 0,
       pageCursors: {} as Record<string, string | null>,
       loadingMore: false,
+      resizeObserver: null as ResizeObserver | null,
+      listKeeps: 30,
     };
+  },
+  mounted() {
+    if (typeof ResizeObserver === "undefined") return;
+    // Observe the root element for size changes. When .tree-list becomes
+    // available (after nodes are built), attach a second observer on it.
+    this.resizeObserver = new ResizeObserver(() => {
+      this.updateListKeeps();
+    });
+    this.resizeObserver.observe(this.$el);
+  },
+  beforeDestroy() {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
   },
   computed: {
     extraProps() {
@@ -197,6 +214,16 @@ export default Vue.extend({
     },
   },
   methods: {
+    updateListKeeps() {
+      const listEl = this.$el?.querySelector(
+        ".tree-list"
+      ) as HTMLElement | null;
+      const height = listEl?.clientHeight ?? this.$el?.clientHeight ?? 0;
+      if (height > 0) {
+        this.listKeeps = Math.ceil((height / 28) * 2) + 4;
+      }
+    },
+
     async rebuild(
       options: { preserveState?: boolean; preserveSearch?: boolean } = {}
     ) {
@@ -756,6 +783,7 @@ export default Vue.extend({
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
   background: $theme-bg;
   border: 1px solid $border-color;
   outline: none;
@@ -803,6 +831,8 @@ export default Vue.extend({
 
 .tree-list {
   flex: 1;
+  min-height: 0;
+  height: 100%;
   overflow: auto;
 }
 
