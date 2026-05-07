@@ -16,6 +16,7 @@
         : undefined
     "
     :aria-level="source.level + 1"
+    @contextmenu.prevent="onRightClick"
   >
     <!-- Chevron -->
     <span
@@ -108,11 +109,30 @@
     >
       {{ source.childCount }}
     </span>
+
+    <!-- Type context menu -->
+    <div
+      v-if="contextMenu.visible && source.type === 'field'"
+      class="type-context-menu"
+      :style="{ position: 'fixed', top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+    >
+      <div
+        v-for="typeDef in firestoreTypes"
+        :key="typeDef.key"
+        class="type-menu-item"
+        :class="{ active: source.fieldType === typeDef.key }"
+        @mousedown.stop="changeType(typeDef)"
+      >
+        <span class="type-check">{{ source.fieldType === typeDef.key ? "✓" : "" }}</span>
+        {{ typeDef.label }}
+      </div>
+    </div>
   </div>
 </template>
 
 <script lang="ts">
 import Vue from "vue";
+import { FIRESTORE_TYPES, FirestoreTypeDefinition } from "@/lib/db/firestoreTypes";
 
 interface FirestoreTreeNode {
   id: string;
@@ -143,6 +163,8 @@ export default Vue.extend({
       editing: false,
       saving: false,
       editValue: undefined as unknown,
+      firestoreTypes: FIRESTORE_TYPES as FirestoreTypeDefinition[],
+      contextMenu: { visible: false, x: 0, y: 0 } as { visible: boolean; x: number; y: number },
     };
   },
   computed: {
@@ -205,6 +227,34 @@ export default Vue.extend({
         }
       }
       (this as any).$native.clipboard.writeText(text);
+    },
+    onRightClick(e: MouseEvent) {
+      if (this.source.type !== "field") return;
+      e.preventDefault();
+      this.contextMenu = { visible: true, x: e.clientX, y: e.clientY };
+      const close = (ev: MouseEvent) => {
+        if (!(ev.target as Element).closest(".type-context-menu")) {
+          this.closeContextMenu();
+          document.removeEventListener("mousedown", close);
+        }
+      };
+      document.addEventListener("mousedown", close);
+    },
+    closeContextMenu() {
+      this.contextMenu = { visible: false, x: 0, y: 0 };
+    },
+    changeType(typeDef: FirestoreTypeDefinition) {
+      this.closeContextMenu();
+      const newValue = typeDef.defaultValue();
+      this.saving = true;
+      this.onEdit(
+        this.source,
+        newValue,
+        (success: boolean) => {
+          this.saving = false;
+        },
+        typeDef.key
+      );
     },
   },
 });
@@ -371,5 +421,38 @@ export default Vue.extend({
   to {
     transform: rotate(360deg);
   }
+}
+
+.type-context-menu {
+  background: $theme-bg;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  min-width: 140px;
+  padding: 4px 0;
+}
+
+.type-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  color: $text-dark;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover,
+  &.active {
+    background: $theme-primary;
+    color: white;
+  }
+}
+
+.type-check {
+  width: 14px;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 </style>
