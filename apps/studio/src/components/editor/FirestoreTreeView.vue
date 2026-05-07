@@ -173,6 +173,13 @@ export default Vue.extend({
         collapsibleNodes.every((node) => node.expanded)
       );
     },
+    nodeMap(): Map<string, FirestoreTreeNode> {
+      const m = new Map<string, FirestoreTreeNode>();
+      for (const n of this.nodes) {
+        m.set(n.id, n);
+      }
+      return m;
+    },
   },
   watch: {
     rows: {
