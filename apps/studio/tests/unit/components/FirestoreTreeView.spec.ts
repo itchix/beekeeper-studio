@@ -90,3 +90,30 @@ describe("FirestoreTreeView insertNodesAfter", () => {
     expect(vm.nodes[2].id).toBe("col:posts");
   });
 });
+
+describe("FirestoreTreeView buildFromResults", () => {
+  it("populates nodes with doc + field nodes in one assignment", async () => {
+    const rows = [
+      { __name__: "users/doc1", name: "Alice", age: 30 },
+      { __name__: "users/doc2", name: "Bob", age: 25 },
+    ];
+    const fields = [
+      { name: "__name__", dataType: "string" },
+      { name: "name", dataType: "string" },
+      { name: "age", dataType: "number" },
+    ];
+    const wrapper = makeWrapper({ rows, fields, tableName: "users" });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    const vm = wrapper.vm as any;
+    // 2 docs + 2 fields each = 6 nodes (__name__ is excluded)
+    // Expected order: doc1, field:doc1.age, field:doc1.name, doc2, field:doc2.age, field:doc2.name
+    expect(vm.nodes.length).toBe(6);
+    expect(vm.nodes[0].type).toBe("document");
+    expect(vm.nodes[1].type).toBe("field");
+    expect(vm.nodes[2].type).toBe("field");
+    expect(vm.nodes[3].type).toBe("document");
+    expect(vm.nodes[4].type).toBe("field");
+    expect(vm.nodes[5].type).toBe("field");
+  });
+});

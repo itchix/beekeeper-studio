@@ -230,7 +230,8 @@ export default Vue.extend({
     },
 
     buildFromResults() {
-      const docNodes = (this.rows as any[]).map((row: any, idx: number) => {
+      const flat: FirestoreTreeNode[] = [];
+      for (const [idx, row] of (this.rows as any[]).entries()) {
         const namePath = row.__name__ || row.id || `doc-${idx}`;
         const parts =
           typeof namePath === "string"
@@ -260,7 +261,7 @@ export default Vue.extend({
           );
         }
 
-        return {
+        const docNode: FirestoreTreeNode = {
           id: docNodeId,
           parentId: undefined,
           type: "document" as const,
@@ -274,17 +275,13 @@ export default Vue.extend({
           level: 0,
           isEditable: false,
         };
-      });
 
-      // Flatten: for each doc, insert doc then its field children
-      for (const doc of docNodes) {
-        this.nodes.push(doc);
-        if (doc.children) {
-          for (const field of doc.children) {
-            this.nodes.push(field);
-          }
+        flat.push(docNode);
+        for (const field of children) {
+          flat.push(field);
         }
       }
+      this.nodes = flat;
     },
 
     makeCollectionNode(name: string): FirestoreTreeNode {
