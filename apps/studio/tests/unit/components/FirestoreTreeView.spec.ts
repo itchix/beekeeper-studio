@@ -25,6 +25,8 @@ describe("FirestoreTreeView nodeMap", () => {
 
   it("maps each node id to its node", async () => {
     const wrapper = makeWrapper();
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
     const vm = wrapper.vm as any;
     vm.nodes = [
       { id: "doc:a", type: "document", expanded: false, level: 0, parentId: undefined },
@@ -37,6 +39,8 @@ describe("FirestoreTreeView nodeMap", () => {
 
   it("recalculates when nodes changes", async () => {
     const wrapper = makeWrapper();
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
     const vm = wrapper.vm as any;
     const map1 = vm.nodeMap;
     vm.nodes = [{ id: "new:doc", type: "document", expanded: false, level: 0, parentId: undefined, label: "", displayValue: "", isEditable: false, loading: false }];
@@ -175,5 +179,35 @@ describe("FirestoreTreeView expandAll (results mode)", () => {
     expect(docNodes.every((n: any) => n.expanded)).toBe(true);
     // Should call $forceUpdate exactly once
     expect(forceUpdateSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("FirestoreTreeView rows watcher deferral", () => {
+  it("does not populate nodes synchronously on mount", () => {
+    const rows = [{ __name__: "users/doc1", name: "Alice" }];
+    const fields = [
+      { name: "__name__", dataType: "string" },
+      { name: "name", dataType: "string" },
+    ];
+    // Do NOT await nextTick — we want the synchronous snapshot
+    const wrapper = shallowMount(FirestoreTreeView, {
+      propsData: { connection: mockConnection, rows, fields, mode: "results", tableName: "users" },
+    });
+    const vm = wrapper.vm as any;
+    // Nodes should be empty immediately after mount (deferred)
+    expect(vm.nodes.length).toBe(0);
+  });
+
+  it("populates nodes after nextTick", async () => {
+    const rows = [{ __name__: "users/doc1", name: "Alice" }];
+    const fields = [
+      { name: "__name__", dataType: "string" },
+      { name: "name", dataType: "string" },
+    ];
+    const wrapper = makeWrapper({ rows, fields, mode: "results", tableName: "users" });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    const vm = wrapper.vm as any;
+    expect(vm.nodes.length).toBeGreaterThan(0);
   });
 });

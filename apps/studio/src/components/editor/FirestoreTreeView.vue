@@ -184,7 +184,9 @@ export default Vue.extend({
   watch: {
     rows: {
       handler() {
-        this.rebuild({ preserveState: true, preserveSearch: true });
+        this.$nextTick(() => {
+          this.rebuild({ preserveState: true, preserveSearch: true });
+        });
       },
       immediate: true,
     },
