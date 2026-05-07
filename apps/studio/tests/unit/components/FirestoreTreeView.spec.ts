@@ -74,3 +74,19 @@ describe("FirestoreTreeView isNodeVisible", () => {
     expect(vm.isNodeVisible(child)).toBe(true);
   });
 });
+
+describe("FirestoreTreeView insertNodesAfter", () => {
+  it("inserts new nodes immediately after the parent node", () => {
+    const wrapper = makeWrapper();
+    const vm = wrapper.vm as any;
+    const col = { id: "col:users", parentId: undefined, type: "collection", expanded: true, level: 0, label: "users", displayValue: "", isEditable: false, loading: false };
+    const other = { id: "col:posts", parentId: undefined, type: "collection", expanded: false, level: 0, label: "posts", displayValue: "", isEditable: false, loading: false };
+    vm.nodes = [col, other];
+
+    const newDoc = { id: "doc:users/1", parentId: "col:users", type: "document", expanded: false, level: 1, label: "1", displayValue: "", isEditable: false, loading: false };
+    vm.insertNodesAfter(col, [newDoc]);
+
+    expect(vm.nodes[1].id).toBe("doc:users/1");
+    expect(vm.nodes[2].id).toBe("col:posts");
+  });
+});

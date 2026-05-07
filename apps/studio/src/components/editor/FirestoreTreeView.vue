@@ -658,7 +658,7 @@ export default Vue.extend({
             insertAfter = i;
             break;
           }
-          const ancestor = this.nodes.find((a) => a.id === ancestorId);
+          const ancestor = this.nodeMap.get(ancestorId);
           ancestorId = ancestor?.parentId;
         }
       }
