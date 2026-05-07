@@ -50,10 +50,10 @@
       <span class="field-type">{{ source.fieldType }}</span>
       <span
         class="value"
-        :class="{ editable: source.isEditable }"
+        :class="{ editable: source.isEditable, empty: source.displayValue === '' }"
         @click.stop="copyValue"
         @dblclick.stop="source.isEditable && startEdit()"
-        >{{ source.displayValue }}</span
+        >{{ source.displayValue !== '' ? source.displayValue : '""' }}</span
       >
     </span>
 
@@ -394,6 +394,11 @@ export default Vue.extend({
     &:hover {
       color: $theme-primary;
     }
+  }
+
+  &.empty {
+    color: $text-lighter;
+    font-style: italic;
   }
 }
 
