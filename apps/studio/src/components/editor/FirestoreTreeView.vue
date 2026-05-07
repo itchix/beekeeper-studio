@@ -670,7 +670,7 @@ export default Vue.extend({
 
       let currentId: string | undefined = node.parentId;
       while (currentId) {
-        const ancestor = this.nodes.find((n) => n.id === currentId);
+        const ancestor = this.nodeMap.get(currentId);
         if (!ancestor || !ancestor.expanded) return false;
         currentId = ancestor.parentId;
       }

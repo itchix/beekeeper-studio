@@ -46,3 +46,31 @@ describe("FirestoreTreeView nodeMap", () => {
     expect(map2.get("new:doc")).toBeDefined();
   });
 });
+
+describe("FirestoreTreeView isNodeVisible", () => {
+  it("returns true for level-0 nodes", () => {
+    const wrapper = makeWrapper();
+    const vm = wrapper.vm as any;
+    const node = { id: "doc:a", parentId: undefined, level: 0, expanded: false, type: "document" };
+    vm.nodes = [node];
+    expect(vm.isNodeVisible(node)).toBe(true);
+  });
+
+  it("returns false when parent is collapsed", () => {
+    const wrapper = makeWrapper();
+    const vm = wrapper.vm as any;
+    const parent = { id: "doc:a", parentId: undefined, level: 0, expanded: false, type: "document" };
+    const child = { id: "field:a.x", parentId: "doc:a", level: 2, expanded: false, type: "field" };
+    vm.nodes = [parent, child];
+    expect(vm.isNodeVisible(child)).toBe(false);
+  });
+
+  it("returns true when all ancestors are expanded", () => {
+    const wrapper = makeWrapper();
+    const vm = wrapper.vm as any;
+    const parent = { id: "doc:a", parentId: undefined, level: 0, expanded: true, type: "document" };
+    const child = { id: "field:a.x", parentId: "doc:a", level: 2, expanded: false, type: "field" };
+    vm.nodes = [parent, child];
+    expect(vm.isNodeVisible(child)).toBe(true);
+  });
+});
