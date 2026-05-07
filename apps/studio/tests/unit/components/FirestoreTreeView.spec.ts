@@ -34,4 +34,15 @@ describe("FirestoreTreeView nodeMap", () => {
     expect(vm.nodeMap.get("doc:a").type).toBe("document");
     expect(vm.nodeMap.get("field:a.x").parentId).toBe("doc:a");
   });
+
+  it("recalculates when nodes changes", async () => {
+    const wrapper = makeWrapper();
+    const vm = wrapper.vm as any;
+    const map1 = vm.nodeMap;
+    vm.nodes = [{ id: "new:doc", type: "document", expanded: false, level: 0, parentId: undefined, label: "", displayValue: "", isEditable: false, loading: false }];
+    await wrapper.vm.$nextTick();
+    const map2 = vm.nodeMap;
+    expect(map1).not.toBe(map2);
+    expect(map2.get("new:doc")).toBeDefined();
+  });
 });
