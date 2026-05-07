@@ -244,7 +244,9 @@ describe("FirestoreTreeView handleEdit with newFieldType", () => {
     vm.handleEdit(node, 42, (_success: boolean) => {}, "integer");
 
     await vm.$nextTick();
-    await new Promise((r) => setTimeout(r, 50));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
 
     expect(mockConn.applyChanges).toHaveBeenCalledWith({
       updates: [{
@@ -257,5 +259,6 @@ describe("FirestoreTreeView handleEdit with newFieldType", () => {
       deletes: [],
     });
     expect(node.fieldType).toBe("integer");
+    expect(savedFieldType).toBe("integer");
   });
 });
