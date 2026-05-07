@@ -167,6 +167,15 @@ export default Vue.extend({
       contextMenu: { visible: false, x: 0, y: 0 } as { visible: boolean; x: number; y: number },
     };
   },
+  created() {
+    (this as any)._closeListener = null;
+  },
+  beforeDestroy() {
+    if ((this as any)._closeListener) {
+      document.removeEventListener("mousedown", (this as any)._closeListener);
+      (this as any)._closeListener = null;
+    }
+  },
   computed: {
     editInputType(): string {
       const ft = this.source.fieldType;
@@ -230,20 +239,29 @@ export default Vue.extend({
     },
     onRightClick(e: MouseEvent) {
       if (this.source.type !== "field") return;
-      e.preventDefault();
-      this.contextMenu = { visible: true, x: e.clientX, y: e.clientY };
+      this.closeContextMenu(); // remove any existing listener first
       const close = (ev: MouseEvent) => {
         if (!(ev.target as Element).closest(".type-context-menu")) {
           this.closeContextMenu();
-          document.removeEventListener("mousedown", close);
         }
       };
+      (this as any)._closeListener = close;
       document.addEventListener("mousedown", close);
+      this.contextMenu.visible = true;
+      this.contextMenu.x = e.clientX;
+      this.contextMenu.y = e.clientY;
     },
     closeContextMenu() {
-      this.contextMenu = { visible: false, x: 0, y: 0 };
+      if ((this as any)._closeListener) {
+        document.removeEventListener("mousedown", (this as any)._closeListener);
+        (this as any)._closeListener = null;
+      }
+      this.contextMenu.visible = false;
+      this.contextMenu.x = 0;
+      this.contextMenu.y = 0;
     },
     changeType(typeDef: FirestoreTypeDefinition) {
+      if (this.saving) return;
       this.closeContextMenu();
       const newValue = typeDef.defaultValue();
       this.saving = true;
