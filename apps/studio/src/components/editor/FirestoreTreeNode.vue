@@ -50,10 +50,13 @@
       <span class="field-type">{{ source.fieldType }}</span>
       <span
         class="value"
-        :class="{ editable: source.isEditable, empty: source.displayValue === '' }"
+        :class="{
+          editable: source.isEditable,
+          empty: source.displayValue === '',
+        }"
         @click.stop="copyValue"
         @dblclick.stop="source.isEditable && startEdit()"
-        >{{ source.displayValue !== '' ? source.displayValue : '""' }}</span
+        >{{ source.displayValue !== "" ? source.displayValue : '""' }}</span
       >
     </span>
 
@@ -114,7 +117,11 @@
     <div
       v-if="contextMenu.visible && source.type === 'field'"
       class="type-context-menu"
-      :style="{ position: 'fixed', top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+      :style="{
+        position: 'fixed',
+        top: contextMenu.y + 'px',
+        left: contextMenu.x + 'px',
+      }"
     >
       <div
         v-for="typeDef in firestoreTypes"
@@ -123,7 +130,9 @@
         :class="{ active: source.fieldType === typeDef.key }"
         @mousedown.stop="changeType(typeDef)"
       >
-        <span class="type-check">{{ source.fieldType === typeDef.key ? "✓" : "" }}</span>
+        <span class="type-check">{{
+          source.fieldType === typeDef.key ? "✓" : ""
+        }}</span>
         {{ typeDef.label }}
       </div>
     </div>
@@ -132,7 +141,10 @@
 
 <script lang="ts">
 import Vue from "vue";
-import { FIRESTORE_TYPES, FirestoreTypeDefinition } from "@/lib/db/firestoreTypes";
+import {
+  FIRESTORE_TYPES,
+  FirestoreTypeDefinition,
+} from "@/lib/db/firestoreTypes";
 
 interface FirestoreTreeNode {
   id: string;
@@ -164,7 +176,11 @@ export default Vue.extend({
       saving: false,
       editValue: undefined as unknown,
       firestoreTypes: FIRESTORE_TYPES as FirestoreTypeDefinition[],
-      contextMenu: { visible: false, x: 0, y: 0 } as { visible: boolean; x: number; y: number },
+      contextMenu: { visible: false, x: 0, y: 0 } as {
+        visible: boolean;
+        x: number;
+        y: number;
+      },
     };
   },
   created() {

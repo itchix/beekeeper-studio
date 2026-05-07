@@ -613,6 +613,12 @@ export default Vue.extend({
 
       const oldValue = node.value;
       const resolvedFieldType = newFieldType ?? node.fieldType;
+
+      if (newValue === oldValue && !newFieldType) {
+        done(true);
+        return;
+      }
+
       const shouldStageEdit = !!this.$listeners["field-saved"];
 
       if (shouldStageEdit) {
