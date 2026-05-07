@@ -152,3 +152,28 @@ describe("FirestoreTreeView loadDocuments", () => {
     expect(vm.nodes[2].type).toBe("field");
   });
 });
+
+describe("FirestoreTreeView expandAll (results mode)", () => {
+  it("expands all non-field nodes in one pass without async loading", async () => {
+    const rows = [
+      { __name__: "users/doc1", name: "Alice" },
+      { __name__: "users/doc2", name: "Bob" },
+    ];
+    const fields = [
+      { name: "__name__", dataType: "string" },
+      { name: "name", dataType: "string" },
+    ];
+    const wrapper = makeWrapper({ rows, fields, mode: "results", tableName: "users" });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    const vm = wrapper.vm as any;
+    const forceUpdateSpy = jest.spyOn(vm, "$forceUpdate");
+
+    await vm.expandAll();
+
+    const docNodes = vm.nodes.filter((n: any) => n.type === "document");
+    expect(docNodes.every((n: any) => n.expanded)).toBe(true);
+    // Should call $forceUpdate exactly once
+    expect(forceUpdateSpy).toHaveBeenCalledTimes(1);
+  });
+});
