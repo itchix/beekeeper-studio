@@ -117,3 +117,38 @@ describe("FirestoreTreeView buildFromResults", () => {
     expect(vm.nodes[5].type).toBe("field");
   });
 });
+
+describe("FirestoreTreeView loadDocuments", () => {
+  it("inserts doc and field nodes after the collection node", async () => {
+    const mockConn = {
+      listTables: jest.fn().mockResolvedValue([
+        { name: "users", entityType: "table" }
+      ]),
+      selectTop: jest.fn().mockResolvedValue({
+        result: [{ __name__: "users/doc1", name: "Alice" }],
+        pageState: null,
+      }),
+    };
+    const wrapper = makeWrapper({ connection: mockConn, mode: "explorer" });
+    const vm = wrapper.vm as any;
+
+    // Build nodes from collections
+    await vm.buildFromCollections();
+    await wrapper.vm.$nextTick();
+
+    // Now we should have the collection node
+    expect(vm.nodes.length).toBe(1);
+    expect(vm.nodes[0].type).toBe("collection");
+    expect(vm.nodes[0].id).toBe("col:users");
+
+    const colNode = vm.nodes[0];
+
+    // Load documents into the collection
+    await vm.loadDocuments(colNode);
+
+    // col + 1 doc + 1 field = 3
+    expect(vm.nodes.length).toBe(3);
+    expect(vm.nodes[1].type).toBe("document");
+    expect(vm.nodes[2].type).toBe("field");
+  });
+});

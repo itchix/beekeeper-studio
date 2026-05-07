@@ -456,11 +456,7 @@ export default Vue.extend({
         const flatNodes: FirestoreTreeNode[] = [];
         for (const doc of docNodes) {
           flatNodes.push(doc);
-          if (doc.children && doc.children.length > 0) {
-            for (const field of doc.children) {
-              flatNodes.push(field);
-            }
-          }
+          if (doc.children) flatNodes.push(...doc.children);
         }
         this.insertNodesAfter(collectionNode, flatNodes);
       } catch (err: any) {
@@ -510,11 +506,7 @@ export default Vue.extend({
           const flatNodes: FirestoreTreeNode[] = [];
           for (const doc of newDocs) {
             flatNodes.push(doc);
-            if (doc.children && doc.children.length > 0) {
-              for (const field of doc.children) {
-                flatNodes.push(field);
-              }
-            }
+            if (doc.children) flatNodes.push(...doc.children);
           }
           this.insertNodesAfter(collectionNode, flatNodes);
         } catch (err: any) {
