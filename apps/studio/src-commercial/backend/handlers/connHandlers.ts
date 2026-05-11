@@ -1,7 +1,7 @@
 import { UserSetting } from "@/common/appdb/models/user_setting";
 import { IConnection } from "@/common/interfaces/IConnection";
 import { DatabaseFilterOptions, ExtendedTableColumn, FieldDescriptor, FieldEditData, FilterOptions, NgQueryResult, OrderBy, PrimaryKeyColumn, Routine, SchemaFilterOptions, StreamResults, SupportedFeatures, TableChanges, TableColumn, TableFilter, TableIndex, TableInsert, TableOrView, TablePartition, TableProperties, TableResult, TableTrigger, TableUpdateResult } from "@/lib/db/models";
-import { DatabaseElement, IDbConnectionServerConfig } from "@/lib/db/types";
+import { DatabaseElement, FirestoreAuthUser, CreateFirestoreAuthUserRequest, UpdateFirestoreAuthUserRequest, IDbConnectionServerConfig } from "@/lib/db/types";
 import { AlterPartitionsSpec, AlterTableSpec, CreateTableSpec, dialectFor, IndexAlterations, RelationAlterations, TableKey } from "@shared/lib/dialects/models";
 import { checkConnection, errorMessages, getDriverHandler, state } from "@/handlers/handlerState";
 import ConnectionProvider from '../lib/connection-provider';
@@ -129,6 +129,12 @@ export interface IConnectionHandlers {
   'conn/rollbackTransaction': ({ tabId, sId}: { tabId: number, sId: string }) => Promise<void>,
 
   'conn/resetTransactionTimeout': ({ tabId, sId}: {tabId: number, sId: string}) => Promise<void>
+
+  // Firestore Auth
+  'conn/listAuthUsers': ({ pageToken, sId }: { pageToken?: string, sId: string }) => Promise<{ users: FirestoreAuthUser[], nextPageToken?: string }>
+  'conn/createAuthUser': ({ data, sId }: { data: CreateFirestoreAuthUserRequest, sId: string }) => Promise<FirestoreAuthUser>
+  'conn/updateAuthUser': ({ uid, data, sId }: { uid: string, data: UpdateFirestoreAuthUserRequest, sId: string }) => Promise<FirestoreAuthUser>
+  'conn/deleteAuthUser': ({ uid, sId }: { uid: string, sId: string }) => Promise<void>
 }
 
 export const ConnHandlers: IConnectionHandlers = {
@@ -626,6 +632,26 @@ export const ConnHandlers: IConnectionHandlers = {
 
   'conn/resetTransactionTimeout': async function({ tabId, sId }: { tabId: number, sId: string }) {
     createOrResetTransactionTimeout(sId, tabId, true);
+  },
+
+  'conn/listAuthUsers': async function({ pageToken, sId }: { pageToken?: string, sId: string }) {
+    checkConnection(sId);
+    return await state(sId).connection.listAuthUsers(pageToken);
+  },
+
+  'conn/createAuthUser': async function({ data, sId }: { data: CreateFirestoreAuthUserRequest, sId: string }) {
+    checkConnection(sId);
+    return await state(sId).connection.createAuthUser(data);
+  },
+
+  'conn/updateAuthUser': async function({ uid, data, sId }: { uid: string, data: UpdateFirestoreAuthUserRequest, sId: string }) {
+    checkConnection(sId);
+    return await state(sId).connection.updateAuthUser(uid, data);
+  },
+
+  'conn/deleteAuthUser': async function({ uid, sId }: { uid: string, sId: string }) {
+    checkConnection(sId);
+    return await state(sId).connection.deleteAuthUser(uid);
   }
 }
 

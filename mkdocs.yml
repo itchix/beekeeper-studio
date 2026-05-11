@@ -140,6 +140,7 @@ nav:
     - user_guide/connecting/cockroachdb.md
     - user_guide/connecting/duckdb.md
     - user_guide/connecting/firebird.md
+    - Google Firestore: user_guide/connecting/firestore.md
     - user_guide/connecting/google-bigquery.md
     - GreengageDB: user_guide/connecting/greengage.md
     - user_guide/connecting/mongodb.md

@@ -33,7 +33,7 @@ export function convertParamsForReplacement(placeholders: string[], values: stri
 }
 
 export function deparameterizeQuery(queryText: string, dialect: Dialect, params: ParamItems | string[], paramTypes: Options["paramTypes"]) {
-  if (dialect === 'redis') {
+  if (dialect === 'redis' || dialect === 'firestore') {
     // formatting breaks redis multi-line command execution
     return queryText;
   }

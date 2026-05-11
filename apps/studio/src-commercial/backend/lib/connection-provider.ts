@@ -33,13 +33,13 @@ export default {
     if (ssh && config.sshHost) {
       const fileConfig = readSshConfig(config.sshHost.trim())
       if (fileConfig.host) {
-        ssh.host = fileConfig.host
+        ssh.host = fileConfig.host;
       }
       if (fileConfig.port && !ssh.port) {
         ssh.port = fileConfig.port
       }
       if (fileConfig.user && !ssh.user) {
-        ssh.user = fileConfig.user
+        ssh.user = fileConfig.user;
       }
       if (config.sshMode === 'agent') {
         if (fileConfig.identityFile && !ssh.privateKey) {
@@ -53,13 +53,13 @@ export default {
     if (ssh && config.sshBastionHost) {
       const fileConfig = readSshConfig(config.sshBastionHost.trim())
       if (fileConfig.host) {
-        ssh.bastionHost = fileConfig.host
+        ssh.bastionHost = fileConfig.host;
       }
       if (fileConfig.port && !ssh.bastionPort) {
         ssh.bastionPort = fileConfig.port
       }
       if (fileConfig.user && !ssh.bastionUser) {
-        ssh.bastionUser = fileConfig.user
+        ssh.bastionUser = fileConfig.user;
       }
       if (config.sshBastionMode === 'agent') {
         if (fileConfig.identityFile && !ssh.bastionPrivateKey) {
@@ -91,8 +91,10 @@ export default {
       sslKeyFile: config.sslKeyFile,
       sslRejectUnauthorized: config.sslRejectUnauthorized,
       trustServerCertificate: config.trustServerCertificate,
-      instantClientLocation: settings?.oracleInstantClient?.stringValue || undefined,
-      oracleConfigLocation: settings?.oracleConfigLocation?.stringValue || undefined,
+      instantClientLocation:
+        settings?.oracleInstantClient?.stringValue || undefined,
+      oracleConfigLocation:
+        settings?.oracleConfigLocation?.stringValue || undefined,
       options: config.options,
       redshiftOptions: config.redshiftOptions,
       iamAuthOptions: config.iamAuthOptions,
@@ -104,13 +106,18 @@ export default {
       libsqlOptions: config.libsqlOptions,
       sqlAnywhereOptions: config.sqlAnywhereOptions,
       surrealDbOptions: config.surrealDbOptions,
-      runtimeExtensions: sqliteExtension ? sqliteExtension as string[] : []
-    }
+      firestoreOptions: config.firestoreOptions,
+      runtimeExtensions: sqliteExtension ? (sqliteExtension as string[]) : [],
+    };
   },
 
-  for(config: IConnection, osUsername: string, settings: IGroupedUserSettings): IDbConnectionPublicServer {
-    const convertedConfig = this.convertConfig(config, osUsername, settings)
-    const server = createServer(convertedConfig)
-    return server
-  }
-}
+  for(
+    config: IConnection,
+    osUsername: string,
+    settings: IGroupedUserSettings
+  ): IDbConnectionPublicServer {
+    const convertedConfig = this.convertConfig(config, osUsername, settings);
+    const server = createServer(convertedConfig);
+    return server;
+  },
+};

@@ -36,7 +36,18 @@
               @blur="updateMinimalModeByFilterRaw"
               ref="valueInput"
               :placeholder="dialectData?.rawFilterPlaceholder || `Enter condition, eg: name like 'Matthew%'`"
+              :list="rawFilterOperators ? 'raw-filter-operators' : undefined"
             >
+            <datalist
+              v-if="rawFilterOperators"
+              id="raw-filter-operators"
+            >
+              <option
+                v-for="op in rawFilterOperators"
+                :key="op"
+                :value="filterRaw.split(' ')[0] ? filterRaw.split(' ')[0] + ' ' + op + ' ' : op + ' '"
+              />
+            </datalist>
             <button
               type="button"
               class="clear btn-link"
@@ -233,6 +244,9 @@ export default Vue.extend({
     },
     canBuilderFilter() {
       return !this.dialectData?.disabledFeatures?.builderFilters;
+    },
+    rawFilterOperators() {
+      return this.dialectData?.rawFilterOperators ?? null;
     }
   },
   methods: {

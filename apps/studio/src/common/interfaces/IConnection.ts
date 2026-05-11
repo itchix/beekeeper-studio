@@ -1,4 +1,4 @@
-import { AzureAuthOptions, BigQueryOptions, CassandraOptions, LibSQLOptions, RedshiftOptions, ConnectionType, SQLAnywhereOptions, IamAuthOptions, SurrealDBOptions } from "@/lib/db/types"
+import { AzureAuthOptions, BigQueryOptions, CassandraOptions, LibSQLOptions, RedshiftOptions, ConnectionType, SQLAnywhereOptions, IamAuthOptions, SurrealDBOptions, FirestoreOptions } from "@/lib/db/types"
 import { Transport } from "../transport"
 
 export type SshMode = null | 'agent' | 'userpass' | 'keyfile'
@@ -62,6 +62,7 @@ export interface ISimpleConnection extends Transport {
   libsqlOptions?: LibSQLOptions
   sqlAnywhereOptions?: SQLAnywhereOptions
   surrealDbOptions?: SurrealDBOptions
+  firestoreOptions?: FirestoreOptions
   connectionFolderId?: Nullable<number>
   position?: number
 }

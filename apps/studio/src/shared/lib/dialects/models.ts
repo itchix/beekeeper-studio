@@ -3,7 +3,7 @@ import CodeMirror from 'codemirror'
 import { Version } from '@/common/version'
 import { ExtendedTableColumn } from '@/lib/db/models'
 
-const communityDialects = ['postgresql', 'greengage', 'sqlite', 'sqlserver', 'mysql', 'redshift', 'bigquery', 'bedrock', 'redis'] as const
+const communityDialects = ['postgresql', 'greengage', 'sqlite', 'sqlserver', 'mysql', 'redshift', 'bigquery', 'bedrock', 'redis', 'firestore'] as const
 const ultimateDialects = ['oracle', 'cassandra', 'firebird', 'clickhouse', 'mongodb', 'duckdb', 'sqlanywhere', 'surrealdb', 'trino'] as const
 
 export const Dialects = [...communityDialects, ...ultimateDialects] as const
@@ -65,7 +65,8 @@ export const DialectTitles: {[K in Dialect]: string} = {
   trino: 'Trino',
   surrealdb: 'SurrealDB',
   bedrock: 'Bedrock',
-  redis: 'Redis'
+  redis: 'Redis',
+  firestore: 'Firestore'
 }
 
 export const KnexDialects = ['postgres', 'sqlite3', 'mssql', 'redshift', 'mysql', 'oracledb', 'firebird', 'cassandra-knex']
@@ -132,6 +133,7 @@ export interface DialectData {
   requireDataset?: boolean,
   disallowedSortColumns?: string[],
   rawFilterPlaceholder?: string,
+  rawFilterOperators?: string[],
   /** Is it called "sql" or "code" in this dialect? */
   sqlLabel: "SQL" | "code";
   disabledFeatures?: {

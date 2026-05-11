@@ -1,4 +1,4 @@
-import { DatabaseElement, IBasicDatabaseClient } from "../db/types";
+import { DatabaseElement, FirestoreAuthUser, CreateFirestoreAuthUserRequest, UpdateFirestoreAuthUserRequest, IBasicDatabaseClient } from "../db/types";
 import Vue from 'vue';
 import { CancelableQuery, DatabaseFilterOptions, ExtendedTableColumn, FilterOptions, NgQueryResult, OrderBy, PrimaryKeyColumn, Routine, SchemaFilterOptions, SupportedFeatures, TableChanges, TableFilter, TableColumn, TableIndex, TableOrView, TablePartition, TableResult, TableProperties, StreamResults, TableInsert, TableTrigger, ImportFuncOptions, FieldDescriptor, FieldEditData, ServerStatistics } from "../db/models";
 import { AlterPartitionsSpec, AlterTableSpec, CreateTableSpec, IndexAlterations, RelationAlterations, TableKey } from "@shared/lib/dialects/models";
@@ -341,5 +341,21 @@ export class ElectronUtilityConnectionClient implements IBasicDatabaseClient {
   // no frontend for this yet
   getServerStatistics(): Promise<ServerStatistics | null> {
       throw new Error("Method not implemented.");
+  }
+
+  async listAuthUsers(pageToken?: string): Promise<{ users: FirestoreAuthUser[], nextPageToken?: string }> {
+    return await Vue.prototype.$util.send('conn/listAuthUsers', { pageToken });
+  }
+
+  async createAuthUser(data: CreateFirestoreAuthUserRequest): Promise<FirestoreAuthUser> {
+    return await Vue.prototype.$util.send('conn/createAuthUser', { data });
+  }
+
+  async updateAuthUser(uid: string, data: UpdateFirestoreAuthUserRequest): Promise<FirestoreAuthUser> {
+    return await Vue.prototype.$util.send('conn/updateAuthUser', { uid, data });
+  }
+
+  async deleteAuthUser(uid: string): Promise<void> {
+    return await Vue.prototype.$util.send('conn/deleteAuthUser', { uid });
   }
 }

@@ -16,6 +16,7 @@ import dev8 from './dev-8'
 import dev9 from './dev-9'
 import dev10 from './dev-10'
 import dev11Greengage from './dev-11-greengage'
+import dev12Firestore from './dev-12-firestore'
 import domains from './20200519'
 import encrypt from './20200917-encrypt-passwords'
 import sslFiles from './20201008-add-ssl-files'
@@ -61,10 +62,10 @@ import queryExcerpts from './20250228_query_excerpts'
 import addInstallationId from './20250404_add_installation_id'
 import sqlAnywhereOptions from './20250414_add_anywhere_options'
 import disabledPluginAutoUpdates from './20250522_add_disabled_plugin_auto_updates'
-import preinstalledPlugins from "./20250523_add_preinstalled_plugins"
-import addContextToTabs from "./20250527_add_context_to_tabs"
-import addPluginSettings from "./20250529_add_plugin_settings"
-import addPrivacyModeSetting from "./20250618_add_privacy_mode_setting"
+import preinstalledPlugins from './20250523_add_preinstalled_plugins'
+import addContextToTabs from './20250527_add_context_to_tabs'
+import addPluginSettings from './20250529_add_plugin_settings'
+import addPrivacyModeSetting from './20250618_add_privacy_mode_setting'
 import createUserPins from './20250604_create_user_pins'
 import createPluginData from './20250630_create_plugin_data'
 import createEncryptedPluginData from './20250630_create_encrypted_plugin_data'
@@ -72,7 +73,7 @@ import createFormatterPresets from './20250831_create_formatter_presets'
 import populateFormatterPresets from './20250831_populate_formatter_presets'
 import surrealDbOptions from './20250702_add_surrealdb_options'
 import upgradeSqliteExtensions from './20250911_upgrade_sqlite_extensions'
-import addOnboardingNotyShown from "./20251008_add_onboarding_noty_shown_setting"
+import addOnboardingNotyShown from './20251008_add_onboarding_noty_shown_setting'
 import uniqueNameFormatterPresets from './20251013_unique_name_formatter_presets'
 import addUsedQueryId from './20250620_add_used_query_id'
 import addPluginIdGeneratedColumn from './20251003_add_plugin_id_generated_column'
@@ -86,36 +87,71 @@ import createConnectionFolders from './20260223_create_connection_folders'
 import createQueryFolders from './20260223_create_query_folders'
 import addPositionToItems from './20260227_add_position_to_items'
 import addBastionAuth from './20260324_add_bastion_auth'
+import firestoreOptions from './20260427_add_firestore_options'
 import addLicenseInvalidatedAt from './20260421_add_license_invalidated_at'
 import cleanupDuplicateLicenseKeys from './20260421_cleanup_duplicate_license_keys'
 import createTabulatorPersistence from './20260424_create_tabulator_persistence'
 
-import ultimate from './ultimate/index'
+import ultimate from "./ultimate/index";
 
-import UserSettingsWindowPosition from './20240303_user_settings_window_position'
+import UserSettingsWindowPosition from "./20240303_user_settings_window_position";
 
 import rawLog from "@bksLogger";
-import { SqlAnywhereChangeBuilder } from '@/shared/lib/sql/change_builder/SqlAnywhereChangeBuilder'
+import { SqlAnywhereChangeBuilder } from "@/shared/lib/sql/change_builder/SqlAnywhereChangeBuilder";
 
-
-const logger = rawLog.scope('migrations');
+const logger = rawLog.scope("migrations");
 
 const setupSQL = `
  CREATE TABLE IF NOT EXISTS BK_MIGRATIONS(
    name VARCHAR(255) PRIMARY KEY NOT NULL,
    run_at datetime NOT NULL DEFAULT (datetime('now'))
  )
-`
+`;
 const realMigrations = [
-  a, b, c, d, ...ultimate, domains, createSettings, addZoom,
-  addSc, sslFiles, sslReject, pinned, addSort,
-  createCreds, workspaceScoping, workspace2, addTabs, scWorkspace, systemTheme,
+  a,
+  b,
+  c,
+  d,
+  ...ultimate,
+  domains,
+  createSettings,
+  addZoom,
+  addSc,
+  sslFiles,
+  sslReject,
+  pinned,
+  addSort,
+  createCreds,
+  workspaceScoping,
+  workspace2,
+  addTabs,
+  scWorkspace,
+  systemTheme,
 
-  serverCerts, socketPath, connectionOptions, keepaliveInterval, redshiftOptions,
-  createHiddenEntities, createHiddenSchemas, cassandraOptions, readOnlyMode, connectionPins, fixKeymapType, bigQueryOptions,
-  firebirdConnection, exportPath, UserSettingsWindowPosition,
-  demoSetup, minimalMode, tokenCache, libsqlOptions, nameTokenCache, lastUsedWorkspace,
-  maxAllowedAppRelease, userSettingKeymap, missingUserSettings,
+  serverCerts,
+  socketPath,
+  connectionOptions,
+  keepaliveInterval,
+  redshiftOptions,
+  createHiddenEntities,
+  createHiddenSchemas,
+  cassandraOptions,
+  readOnlyMode,
+  connectionPins,
+  fixKeymapType,
+  bigQueryOptions,
+  firebirdConnection,
+  exportPath,
+  UserSettingsWindowPosition,
+  demoSetup,
+  minimalMode,
+  tokenCache,
+  libsqlOptions,
+  nameTokenCache,
+  lastUsedWorkspace,
+  maxAllowedAppRelease,
+  userSettingKeymap,
+  missingUserSettings,
   useBeta,
   deleteDuplicateConnections,
   tabHistoryUpdates,
@@ -125,16 +161,32 @@ const realMigrations = [
   addInstallationId,
   sqlAnywhereOptions,
   queryExcerpts,
-  disabledPluginAutoUpdates, preinstalledPlugins, addContextToTabs, addPluginSettings, createUserPins, addPrivacyModeSetting,
-  createPluginData, createEncryptedPluginData,
-  surrealDbOptions, upgradeSqliteExtensions,
-  addUsedQueryId, addPluginIdGeneratedColumn, addTabDropdownAIShellHintShownSetting,
-  createFormatterPresets, populateFormatterPresets, uniqueNameFormatterPresets,
-  addWindowMaximizedSetting, fixMissingExcerpts,
-  addIamAuthOptions, migrateRedshiftToIamOptions, addEditorFontSize,
-  createConnectionFolders, createQueryFolders,
+  disabledPluginAutoUpdates,
+  preinstalledPlugins,
+  addContextToTabs,
+  addPluginSettings,
+  createUserPins,
+  addPrivacyModeSetting,
+  createPluginData,
+  createEncryptedPluginData,
+  surrealDbOptions,
+  upgradeSqliteExtensions,
+  addUsedQueryId,
+  addPluginIdGeneratedColumn,
+  addTabDropdownAIShellHintShownSetting,
+  createFormatterPresets,
+  populateFormatterPresets,
+  uniqueNameFormatterPresets,
+  addWindowMaximizedSetting,
+  fixMissingExcerpts,
+  addIamAuthOptions,
+  migrateRedshiftToIamOptions,
+  addEditorFontSize,
+  createConnectionFolders,
+  createQueryFolders,
   addPositionToItems,
   addBastionAuth,
+  firestoreOptions,
   addOnboardingNotyShown,
   addLicenseInvalidatedAt,
   cleanupDuplicateLicenseKeys,
@@ -142,77 +194,88 @@ const realMigrations = [
 ]
 
 // fixtures require the models
-const fixtures = [
-  encrypt
-]
+const fixtures = [encrypt];
 
 const devMigrations = [
-  dev1, dev2, dev3, dev4, dev5, dev6, dev7, dev8, dev9,
-  dev10, dev11Greengage
-]
+  dev1,
+  dev2,
+  dev3,
+  dev4,
+  dev5,
+  dev6,
+  dev7,
+  dev8,
+  dev9,
+  dev10,
+  dev11Greengage,
+  dev12Firestore,
+];
 
-const migrations = [...realMigrations, ...fixtures, ...devMigrations]
+const migrations = [...realMigrations, ...fixtures, ...devMigrations];
 
 const Manager = {
   ceQuery: "select name from bk_migrations where name = ?",
   meQuery: "INSERT INTO bk_migrations(name) values (?)",
 
   async checkExists(runner, name) {
-    const result = await runner.query(this.ceQuery, [name])
-    return result.length > 0
+    const result = await runner.query(this.ceQuery, [name]);
+    return result.length > 0;
   },
   async markExists(runner, name) {
-    const result = await runner.query(this.meQuery, [name])
-    return !!result
-  }
-}
-
+    const result = await runner.query(this.meQuery, [name]);
+    return !!result;
+  },
+};
 
 export default class {
   constructor(connection, env) {
-    this.connection = connection
-    this.env = env
+    this.connection = connection;
+    this.env = env;
   }
 
   async isFreshInstall() {
-
-    const runner = this.connection.connection.createQueryRunner()
+    const runner = this.connection.connection.createQueryRunner();
 
     try {
-      const sql = `SELECT name FROM sqlite_master WHERE type='table' AND name='bk_migrations';`
-      const runPreviously = await runner.query(sql)
-      return runPreviously.length === 0
+      const sql = `SELECT name FROM sqlite_master WHERE type='table' AND name='bk_migrations';`;
+      const runPreviously = await runner.query(sql);
+      return runPreviously.length === 0;
     } finally {
-      runner.release()
+      runner.release();
     }
   }
 
   async run() {
-    console.log("running migrations")
-    const runner = this.connection.connection.createQueryRunner()
+    console.log("running migrations");
+    const runner = this.connection.connection.createQueryRunner();
     try {
-      await runner.query(setupSQL)
+      await runner.query(setupSQL);
       for (let i = 0; i < migrations.length; i++) {
-        const migration = migrations[i]
-        logger.debug(`Checking migration ${migration.name}`)
+        const migration = migrations[i];
+        logger.debug(`Checking migration ${migration.name}`);
         if (migration.env && migration.env !== this.env) {
           // env defined, and does not match
-          logger.debug(`Skipping ${migration.name} in ${this.env}, required ${migration.env} `)
-          continue
+          logger.debug(
+            `Skipping ${migration.name} in ${this.env}, required ${migration.env} `
+          );
+          continue;
         }
-        const hasRun = await Manager.checkExists(runner, migration.name)
+        const hasRun = await Manager.checkExists(runner, migration.name);
         if (!hasRun) {
           try {
-            await migration.run(runner, this.env)
-            await Manager.markExists(runner, migration.name)
+            await migration.run(runner, this.env);
+            await Manager.markExists(runner, migration.name);
           } catch (err) {
-            console.log(`Migration ${migration.name} failed with`, err.name, err.message)
+            console.log(
+              `Migration ${migration.name} failed with`,
+              err.name,
+              err.message
+            );
           }
         }
       }
     } finally {
-      runner.release()
+      runner.release();
     }
   }
-
 }
